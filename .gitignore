@@ -1,0 +1,15 @@
+# Secrets
+.env
+
+# Local Docker volumes (only relevant if you bind-mount instead of named volumes)
+prometheus-data/
+grafana-data/
+
+# Editor / OS junk
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+__pycache__/
+*.pyc

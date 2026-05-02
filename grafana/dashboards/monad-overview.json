@@ -1,0 +1,1606 @@
+{
+  "panels": [
+    {
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "title": "Sync status",
+      "type": "row"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "unit": "none"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 1
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "expr": "monad_local_block_number"
+        }
+      ],
+      "title": "Local block",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "unit": "none"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 1
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "expr": "monad_public_block_number"
+        }
+      ],
+      "title": "Public block",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 50
+              }
+            ]
+          },
+          "unit": "none"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 8,
+        "y": 1
+      },
+      "id": 4,
+      "targets": [
+        {
+          "expr": "monad_sync_gap_blocks"
+        }
+      ],
+      "title": "Sync gap",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 3
+              },
+              {
+                "color": "orange",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 30
+              }
+            ]
+          },
+          "unit": "s"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 11,
+        "y": 1
+      },
+      "id": 5,
+      "targets": [
+        {
+          "expr": "monad_last_block_age_seconds"
+        }
+      ],
+      "title": "Last block age",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 2,
+        "x": 14,
+        "y": 1
+      },
+      "id": 6,
+      "options": {
+        "colorMode": "background"
+      },
+      "targets": [
+        {
+          "expr": "monad_rpc_local_up"
+        }
+      ],
+      "title": "RPC local",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 2,
+        "x": 16,
+        "y": 1
+      },
+      "id": 7,
+      "options": {
+        "colorMode": "background"
+      },
+      "targets": [
+        {
+          "expr": "monad_rpc_public_up"
+        }
+      ],
+      "title": "RPC public",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1.5
+              }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 18,
+        "y": 1
+      },
+      "id": 8,
+      "targets": [
+        {
+          "expr": "rate(monad_state_consensus_events_commit_block[1m])"
+        }
+      ],
+      "title": "Block commit /sec",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 21,
+        "y": 1
+      },
+      "id": 9,
+      "targets": [
+        {
+          "expr": "rate(monad_state_consensus_events_local_timeout[5m]) * 60"
+        }
+      ],
+      "title": "Local timeouts /min",
+      "type": "stat"
+    },
+    {
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "id": 10,
+      "title": "Service uptime · Peers",
+      "type": "row"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 4,
+        "x": 0,
+        "y": 6
+      },
+      "id": 11,
+      "targets": [
+        {
+          "expr": "monad_service_uptime_seconds{service=\"monad-bft\"}"
+        }
+      ],
+      "title": "monad-bft uptime",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 4,
+        "x": 4,
+        "y": 6
+      },
+      "id": 12,
+      "targets": [
+        {
+          "expr": "monad_service_uptime_seconds{service=\"monad-execution\"}"
+        }
+      ],
+      "title": "monad-execution uptime",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 4,
+        "x": 8,
+        "y": 6
+      },
+      "id": 13,
+      "targets": [
+        {
+          "expr": "monad_service_uptime_seconds{service=\"monad-rpc\"}"
+        }
+      ],
+      "title": "monad-rpc uptime",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "green",
+                "value": 150
+              }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 3,
+        "x": 12,
+        "y": 6
+      },
+      "id": 14,
+      "targets": [
+        {
+          "expr": "monad_peer_disc_num_peers"
+        }
+      ],
+      "title": "Active peers",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 3,
+        "x": 15,
+        "y": 6
+      },
+      "id": 15,
+      "targets": [
+        {
+          "expr": "monad_peer_disc_num_pending_peers"
+        }
+      ],
+      "title": "Pending peers",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 3,
+        "x": 18,
+        "y": 6
+      },
+      "id": 16,
+      "targets": [
+        {
+          "expr": "monad_peer_disc_num_upstream_validators"
+        }
+      ],
+      "title": "Upstream validators",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 3,
+        "x": 21,
+        "y": 6
+      },
+      "id": 17,
+      "targets": [
+        {
+          "expr": "monad_bft_raptorcast_secondary_client_num_current_groups"
+        }
+      ],
+      "title": "Raptorcast groups",
+      "type": "stat"
+    },
+    {
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "id": 20,
+      "title": "Vote delay",
+      "type": "row"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 150
+              },
+              {
+                "color": "red",
+                "value": 250
+              }
+            ]
+          },
+          "unit": "ms"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 10
+      },
+      "id": 21,
+      "targets": [
+        {
+          "expr": "monad_state_vote_delay_ready_after_timer_start_p50_ms"
+        }
+      ],
+      "title": "Vote delay p50",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 250
+              },
+              {
+                "color": "red",
+                "value": 350
+              }
+            ]
+          },
+          "unit": "ms"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 10
+      },
+      "id": 22,
+      "targets": [
+        {
+          "expr": "monad_state_vote_delay_ready_after_timer_start_p90_ms"
+        }
+      ],
+      "title": "Vote delay p90",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 300
+              },
+              {
+                "color": "red",
+                "value": 400
+              }
+            ]
+          },
+          "unit": "ms"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 10
+      },
+      "id": 23,
+      "targets": [
+        {
+          "expr": "monad_state_vote_delay_ready_after_timer_start_p99_ms"
+        }
+      ],
+      "title": "Vote delay p99",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 10
+      },
+      "id": 24,
+      "targets": [
+        {
+          "expr": "monad_state_vote_delay_ready_after_timer_start_p50_ms",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "monad_state_vote_delay_ready_after_timer_start_p90_ms",
+          "legendFormat": "p90"
+        },
+        {
+          "expr": "monad_state_vote_delay_ready_after_timer_start_p99_ms",
+          "legendFormat": "p99"
+        }
+      ],
+      "title": "Vote delay over time",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
+      "id": 25,
+      "targets": [
+        {
+          "expr": "rate(monad_state_consensus_events_commit_block[1m])",
+          "legendFormat": "commit_block"
+        },
+        {
+          "expr": "rate(monad_state_consensus_events_handle_proposal[1m])",
+          "legendFormat": "handle_proposal"
+        },
+        {
+          "expr": "rate(monad_state_consensus_events_local_timeout[1m])",
+          "legendFormat": "local_timeout"
+        }
+      ],
+      "title": "Consensus events /sec (full-node visible)",
+      "type": "timeseries"
+    },
+    {
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
+      "id": 30,
+      "title": "System resources",
+      "type": "row"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 60
+              },
+              {
+                "color": "orange",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 0,
+        "y": 19
+      },
+      "id": 31,
+      "options": {
+        "showThresholdMarkers": true
+      },
+      "targets": [
+        {
+          "expr": "100 * (1 - avg(system_cpu_utilization_ratio{state=\"idle\"}))"
+        }
+      ],
+      "title": "CPU usage %",
+      "type": "gauge"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 2,
+          "max": 16,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 12
+              },
+              {
+                "color": "red",
+                "value": 16
+              }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 6,
+        "y": 19
+      },
+      "id": 32,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal"
+      },
+      "targets": [
+        {
+          "expr": "system_cpu_load_average_1m",
+          "legendFormat": "1m"
+        },
+        {
+          "expr": "system_cpu_load_average_5m",
+          "legendFormat": "5m"
+        },
+        {
+          "expr": "system_cpu_load_average_15m",
+          "legendFormat": "15m"
+        }
+      ],
+      "title": "Load average vs cores (16)",
+      "type": "bargauge"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "unit": "bytes"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 12,
+        "y": 19
+      },
+      "id": 33,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "donut"
+      },
+      "targets": [
+        {
+          "expr": "system_memory_usage_bytes",
+          "legendFormat": "{{state}}"
+        }
+      ],
+      "title": "Memory",
+      "type": "piechart"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 2,
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 20
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 18,
+        "y": 19
+      },
+      "id": 34,
+      "options": {
+        "showThresholdMarkers": true
+      },
+      "targets": [
+        {
+          "expr": "100 * sum(system_paging_usage_bytes{state=\"used\"}) / clamp_min(sum(system_paging_usage_bytes{state=~\"used|free\"}), 1)"
+        }
+      ],
+      "title": "Swap usage %",
+      "type": "gauge"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "unit": "percentunit"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 26
+      },
+      "id": 35,
+      "targets": [
+        {
+          "expr": "sum by (state) (system_cpu_utilization_ratio)",
+          "legendFormat": "{{state}}"
+        }
+      ],
+      "title": "CPU usage by state over time",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 26
+      },
+      "id": 36,
+      "targets": [
+        {
+          "expr": "system_memory_usage_bytes{state=\"used\"}",
+          "legendFormat": "mem used"
+        },
+        {
+          "expr": "system_memory_usage_bytes{state=\"cached\"}",
+          "legendFormat": "mem cached"
+        },
+        {
+          "expr": "sum(system_paging_usage_bytes{state=\"used\"})",
+          "legendFormat": "swap used"
+        }
+      ],
+      "title": "Memory + swap over time",
+      "type": "timeseries"
+    },
+    {
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 33
+      },
+      "id": 40,
+      "title": "Disk · Filesystem",
+      "type": "row"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 34
+      },
+      "id": 41,
+      "targets": [
+        {
+          "expr": "rate(system_disk_io_bytes_total{device=~\"md3|nvme1n1\"}[1m])",
+          "legendFormat": "{{device}} {{direction}}"
+        }
+      ],
+      "title": "Disk IO bytes/sec (md3 + nvme1n1)",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "unit": "iops"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 34
+      },
+      "id": 42,
+      "targets": [
+        {
+          "expr": "rate(system_disk_operations_total{device=~\"md3|nvme1n1\"}[1m])",
+          "legendFormat": "{{device}} {{direction}}"
+        }
+      ],
+      "title": "Disk operations/sec (md3 + nvme1n1)",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 41
+      },
+      "id": 43,
+      "targets": [
+        {
+          "expr": "system_disk_pending_operations{device=~\"md3|nvme1n1\"}",
+          "legendFormat": "{{device}}"
+        }
+      ],
+      "title": "Disk pending queue (depth)",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "max": 1,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.7
+              },
+              {
+                "color": "red",
+                "value": 0.9
+              }
+            ]
+          },
+          "unit": "percentunit"
+        }
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 12,
+        "y": 41
+      },
+      "id": 44,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal"
+      },
+      "targets": [
+        {
+          "expr": "sum by (mountpoint) (system_filesystem_usage_bytes{state=\"used\"}) / sum by (mountpoint) (system_filesystem_usage_bytes{state=~\"used|free\"})",
+          "legendFormat": "{{mountpoint}}"
+        }
+      ],
+      "title": "Filesystem usage % (used/total)",
+      "type": "bargauge"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "unit": "bytes"
+        }
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 18,
+        "y": 41
+      },
+      "id": 45,
+      "targets": [
+        {
+          "expr": "system_filesystem_usage_bytes{state=\"free\",mountpoint=\"/\"}"
+        }
+      ],
+      "title": "Free space (/)",
+      "type": "stat"
+    },
+    {
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 47
+      },
+      "id": 50,
+      "title": "TxPool · Raptorcast",
+      "type": "row"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 48
+      },
+      "id": 51,
+      "targets": [
+        {
+          "expr": "monad_bft_txpool_pool_tracked_txs"
+        }
+      ],
+      "title": "TxPool tracked txs",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 48
+      },
+      "id": 52,
+      "targets": [
+        {
+          "expr": "monad_bft_txpool_pool_tracked_addresses"
+        }
+      ],
+      "title": "TxPool tracked addresses",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 2,
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 48
+      },
+      "id": 53,
+      "targets": [
+        {
+          "expr": "rate(monad_bft_txpool_pool_insert_owned_txs[1m]) + rate(monad_bft_txpool_pool_insert_forwarded_txs[1m])"
+        }
+      ],
+      "title": "TxPool insert /sec",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 2,
+          "unit": "ms"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 48
+      },
+      "id": 54,
+      "targets": [
+        {
+          "expr": "monad_bft_txpool_create_proposal_elapsed_ns / 1e6"
+        }
+      ],
+      "title": "TxPool create_proposal latency p99",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "unit": "Bps"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 48
+      },
+      "id": 55,
+      "targets": [
+        {
+          "expr": "rate(monad_raptorcast_auth_authenticated_udp_bytes_read[1m])"
+        }
+      ],
+      "title": "Raptorcast UDP rx (last 1m avg)",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "unit": "Bps"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 48
+      },
+      "id": 56,
+      "targets": [
+        {
+          "expr": "rate(monad_raptorcast_auth_authenticated_udp_bytes_written[1m])"
+        }
+      ],
+      "title": "Raptorcast UDP tx (last 1m avg)",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 52
+      },
+      "id": 57,
+      "targets": [
+        {
+          "expr": "rate(monad_bft_txpool_pool_drop_pool_full[1m])",
+          "legendFormat": "pool_full"
+        },
+        {
+          "expr": "rate(monad_bft_txpool_pool_drop_fee_too_low[1m])",
+          "legendFormat": "fee_too_low"
+        },
+        {
+          "expr": "rate(monad_bft_txpool_pool_drop_nonce_too_low[1m])",
+          "legendFormat": "nonce_too_low"
+        },
+        {
+          "expr": "rate(monad_bft_txpool_pool_drop_invalid_signature[1m])",
+          "legendFormat": "invalid_signature"
+        },
+        {
+          "expr": "rate(monad_bft_txpool_pool_drop_insufficient_balance[1m])",
+          "legendFormat": "insufficient_balance"
+        },
+        {
+          "expr": "rate(monad_bft_txpool_pool_drop_not_well_formed[1m])",
+          "legendFormat": "not_well_formed"
+        },
+        {
+          "expr": "rate(monad_bft_txpool_pool_drop_replaced_by_higher_priority[1m])",
+          "legendFormat": "replaced"
+        },
+        {
+          "expr": "rate(monad_bft_txpool_pool_drop_internal_state_backend_error[1m])",
+          "legendFormat": "internal_state_backend_error"
+        }
+      ],
+      "title": "TxPool drop reasons /sec",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 52
+      },
+      "id": 58,
+      "targets": [
+        {
+          "expr": "rate(monad_raptorcast_auth_authenticated_udp_bytes_read[1m])",
+          "legendFormat": "rx Bps"
+        },
+        {
+          "expr": "rate(monad_raptorcast_auth_authenticated_udp_bytes_written[1m])",
+          "legendFormat": "tx Bps"
+        },
+        {
+          "expr": "monad_bft_raptorcast_udp_secondary_broadcast_latency_p99_ms",
+          "legendFormat": "broadcast p99 ms (right)"
+        }
+      ],
+      "title": "Raptorcast traffic + latency",
+      "type": "timeseries"
+    },
+    {
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 59
+      },
+      "id": 60,
+      "title": "Errors / failures",
+      "type": "row"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 60
+      },
+      "id": 61,
+      "targets": [
+        {
+          "expr": "rate(monad_state_validation_errors_invalid_signature[5m])",
+          "legendFormat": "invalid_signature"
+        },
+        {
+          "expr": "rate(monad_state_validation_errors_invalid_epoch[5m])",
+          "legendFormat": "invalid_epoch"
+        },
+        {
+          "expr": "rate(monad_state_validation_errors_invalid_seq_num[5m])",
+          "legendFormat": "invalid_seq_num"
+        },
+        {
+          "expr": "rate(monad_state_validation_errors_insufficient_stake[5m])",
+          "legendFormat": "insufficient_stake"
+        },
+        {
+          "expr": "rate(monad_state_validation_errors_invalid_author[5m])",
+          "legendFormat": "invalid_author"
+        },
+        {
+          "expr": "rate(monad_state_validation_errors_invalid_version[5m])",
+          "legendFormat": "invalid_version"
+        },
+        {
+          "expr": "rate(monad_state_validation_errors_invalid_vote_message[5m])",
+          "legendFormat": "invalid_vote_message"
+        },
+        {
+          "expr": "rate(monad_state_validation_errors_not_well_formed_sig[5m])",
+          "legendFormat": "not_well_formed_sig"
+        },
+        {
+          "expr": "rate(monad_state_validation_errors_signatures_duplicate_node[5m])",
+          "legendFormat": "signatures_duplicate"
+        },
+        {
+          "expr": "rate(monad_state_validation_errors_val_data_unavailable[5m])",
+          "legendFormat": "val_data_unavailable"
+        },
+        {
+          "expr": "rate(monad_state_validation_errors_duplicate_tc_tip_round[5m])",
+          "legendFormat": "dup_tc_tip_round"
+        },
+        {
+          "expr": "rate(monad_state_validation_errors_too_many_tc_tip_round[5m])",
+          "legendFormat": "too_many_tc_tip"
+        },
+        {
+          "expr": "rate(monad_state_validation_errors_invalid_tc_round[5m])",
+          "legendFormat": "invalid_tc_round"
+        },
+        {
+          "expr": "rate(monad_state_validation_errors_empty_signers_tc_tip_round[5m])",
+          "legendFormat": "empty_signers"
+        }
+      ],
+      "title": "Validation errors /sec",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 60
+      },
+      "id": 62,
+      "targets": [
+        {
+          "expr": "rate(monad_wireauth_udp_error_decrypt[5m])",
+          "legendFormat": "decrypt"
+        },
+        {
+          "expr": "rate(monad_wireauth_udp_error_decrypt_nonce_duplicate[5m])",
+          "legendFormat": "decrypt_nonce_dup"
+        },
+        {
+          "expr": "rate(monad_wireauth_udp_error_dispatch_control[5m])",
+          "legendFormat": "dispatch_control"
+        },
+        {
+          "expr": "rate(monad_wireauth_udp_error_handshake_response_validation[5m])",
+          "legendFormat": "handshake_response"
+        },
+        {
+          "expr": "rate(monad_wireauth_udp_error_session_index_not_found[5m])",
+          "legendFormat": "session_idx_not_found"
+        },
+        {
+          "expr": "rate(monad_wireauth_udp_error_timestamp_replay[5m])",
+          "legendFormat": "timestamp_replay"
+        }
+      ],
+      "title": "Wireauth errors /sec",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 68
+      },
+      "id": 63,
+      "targets": [
+        {
+          "expr": "rate(monad_state_blocksync_events_headers_response_failed[1m])",
+          "legendFormat": "headers failed"
+        },
+        {
+          "expr": "rate(monad_state_blocksync_events_payload_response_failed[1m])",
+          "legendFormat": "payload failed"
+        },
+        {
+          "expr": "rate(monad_state_blocksync_events_request_failed_no_peers[1m])",
+          "legendFormat": "no peers"
+        },
+        {
+          "expr": "rate(monad_state_blocksync_events_request_timeout[1m])",
+          "legendFormat": "timeout"
+        },
+        {
+          "expr": "rate(monad_state_blocksync_events_headers_validation_failed[1m])",
+          "legendFormat": "headers validation failed"
+        }
+      ],
+      "title": "Blocksync failures /sec",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 68
+      },
+      "id": 64,
+      "targets": [
+        {
+          "expr": "monad_statesync_syncing",
+          "legendFormat": "syncing flag"
+        },
+        {
+          "expr": "rate(monad_statesync_server_num_syncdone_failed[5m])",
+          "legendFormat": "syncdone failed /s"
+        },
+        {
+          "expr": "rate(monad_statesync_server_num_syncdone_success[5m])",
+          "legendFormat": "syncdone success /s"
+        },
+        {
+          "expr": "rate(monad_state_blocktree_events_add_success[1m])",
+          "legendFormat": "blocktree add /s"
+        },
+        {
+          "expr": "rate(monad_state_blocktree_events_prune_success[1m])",
+          "legendFormat": "blocktree prune /s"
+        }
+      ],
+      "title": "Statesync · Blocktree",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "unit": "pps"
+        }
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 75
+      },
+      "id": 65,
+      "targets": [
+        {
+          "expr": "rate(system_network_dropped_total{device=\"enp10s0f0np0\"}[5m])",
+          "legendFormat": "dropped {{direction}}"
+        },
+        {
+          "expr": "rate(system_network_errors_total{device=\"enp10s0f0np0\"}[5m])",
+          "legendFormat": "errors {{direction}}"
+        }
+      ],
+      "title": "Network errors (enp10s0f0np0)",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps"
+        }
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 75
+      },
+      "id": 66,
+      "targets": [
+        {
+          "expr": "rate(system_network_io_bytes_total{device=\"enp10s0f0np0\"}[1m])",
+          "legendFormat": "{{direction}} Bps"
+        }
+      ],
+      "title": "Network throughput (enp10s0f0np0)",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 81
+      },
+      "id": 67,
+      "targets": [
+        {
+          "expr": "rate(monad_raptorcast_total_recv_errors[1m])",
+          "legendFormat": "raptorcast recv errors"
+        },
+        {
+          "expr": "rate(monad_peer_disc_lookup_timeout[1m])",
+          "legendFormat": "peer disc lookup timeout"
+        },
+        {
+          "expr": "rate(monad_peer_disc_ping_timeout[1m])",
+          "legendFormat": "peer disc ping timeout"
+        }
+      ],
+      "title": "Raptorcast recv errors + peer disc timeouts /sec",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 81
+      },
+      "id": 68,
+      "targets": [
+        {
+          "expr": "rate(monad_state_consensus_events_local_timeout[1m])",
+          "legendFormat": "local_timeout"
+        },
+        {
+          "expr": "rate(monad_state_consensus_events_old_remote_timeout[1m])",
+          "legendFormat": "old remote timeout"
+        },
+        {
+          "expr": "rate(monad_state_consensus_events_remote_timeout_msg[1m])",
+          "legendFormat": "remote_timeout_msg"
+        },
+        {
+          "expr": "rate(monad_state_consensus_events_failed_txn_validation[1m])",
+          "legendFormat": "failed_txn_validation"
+        },
+        {
+          "expr": "rate(monad_state_consensus_events_failed_ts_validation[1m])",
+          "legendFormat": "failed_ts_validation"
+        },
+        {
+          "expr": "rate(monad_state_consensus_events_rx_base_fee_error[1m])",
+          "legendFormat": "rx_base_fee_error"
+        }
+      ],
+      "title": "Consensus timeouts/failures /sec",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "15s",
+  "schemaVersion": 39,
+  "tags": [
+    "monad",
+    "bft"
+  ],
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "Monad Node — Overview",
+  "uid": "cfkugnwjq8kjkb"
+}
