@@ -23,11 +23,23 @@ Total resource footprint: ~95 MB RAM, ~0.1% CPU. Designed not to interfere with 
 ## Requirements
 
 - Linux x86_64 host running a Monad node with `monad-bft.service`, `monad-execution.service`, `monad-rpc.service`
-- Monad's bundled `otelcol-contrib` running and exposing Prometheus metrics on `:8889` (default install does this)
-- Docker 20+ with `docker compose` plugin
+- Monad's bundled `otelcol-contrib` running and exposing Prometheus metrics on `:8889` (default Monad install does this)
+- Docker 20+ with `docker compose` plugin (auto-installed by `install.sh` if missing)
 - ~1 GB free disk for Prometheus data (30-day retention)
-- `sudo` for the initial `ufw` rule
+- `sudo` for initial `ufw` rule and otelcol config edit
 - Optional: `cloudflared` if you want public HTTPS access without opening ports
+
+### Heads-up on the default Monad config
+
+The bundled `/etc/otelcol-contrib/config.yaml` shipped with the `monad` apt package only forwards `monad_*` metrics from the node (vote delay, consensus events, peers, txpool). It does **not** include the **`hostmetrics`** receiver, so without an overlay these dashboard panels will be empty:
+
+> CPU usage / Load average / Memory / Swap / Disk IO / Filesystem usage / Network errors
+
+The auto-installer detects this gap and offers to apply a one-time overlay (with backup + restart). You can also run it later: `sudo /opt/monad-grafana/install.sh --enable-hostmetrics`. See [`docs/ENABLE_HOSTMETRICS.md`](docs/ENABLE_HOSTMETRICS.md) for the manual procedure if you'd rather review-then-apply by hand.
+
+### Heads-up on NTP
+
+`vote_delay_ready_after_timer_start` is sensitive to clock skew. `systemd-timesyncd` (Ubuntu/Debian default) drifts ~10–100ms, which makes the p99 panels look 30–80ms worse than reality and triggers false alerts. The installer offers to replace it with `chrony` (sub-ms accuracy, kernel discipline). Strongly recommended.
 
 ---
 

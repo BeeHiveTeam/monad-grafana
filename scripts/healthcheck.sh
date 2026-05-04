@@ -94,14 +94,16 @@ if gap=$(curl -fsS -m 3 "$PROM/api/v1/query?query=monad_sync_gap_blocks" 2>/dev/
 fi
 
 # 5. Last block age (liveness)
+# Note: exporter polls every 10s, so block.age normally oscillates 0–10s.
+# Real stall = age >> exporter poll interval. Thresholds tuned for that.
 if age=$(curl -fsS -m 3 "$PROM/api/v1/query?query=monad_last_block_age_seconds" 2>/dev/null \
          | python3 -c "import json,sys;d=json.load(sys.stdin);r=d.get('data',{}).get('result',[]);print(int(float(r[0]['value'][1])) if r else -1)" 2>/dev/null); then
   if (( age < 0 )); then
     check "block.age" "fail" "no data"
-  elif (( age < 5 )); then
+  elif (( age < 15 )); then
     check "block.age" "ok" "${age}s"
-  elif (( age < 30 )); then
-    check "block.age" "warn" "${age}s (slow)"
+  elif (( age < 60 )); then
+    check "block.age" "warn" "${age}s (lagging)"
   else
     check "block.age" "fail" "${age}s — node may be stuck"
   fi
@@ -112,6 +114,33 @@ if curl -fsS -m 3 http://127.0.0.1:3000/api/health >/dev/null 2>&1; then
   check "grafana.health" "ok"
 else
   check "grafana.health" "fail" "API unreachable"
+fi
+
+# 7. Hostmetrics enabled in otelcol (System Resources panels need this)
+if hm=$(curl -fsS -m 3 "$PROM/api/v1/query?query=system_cpu_load_average_1m" 2>/dev/null \
+        | python3 -c "import json,sys;d=json.load(sys.stdin);r=d.get('data',{}).get('result',[]);print(1 if r else 0)" 2>/dev/null); then
+  if [[ "$hm" == "1" ]]; then
+    check "otelcol.hostmetrics" "ok" "system_* metrics flowing"
+  else
+    check "otelcol.hostmetrics" "warn" "not enabled — run install.sh --enable-hostmetrics"
+  fi
+fi
+
+# 8. NTP / clock sync (vote_delay accuracy depends on this)
+if command -v chronyc >/dev/null 2>&1 && systemctl is-active --quiet chrony 2>/dev/null; then
+  off_us=$(chronyc tracking 2>/dev/null | awk '/Last offset/ {printf "%.0f", $4 * 1000000}')
+  off_us_abs=${off_us#-}
+  if [[ -n "$off_us_abs" ]] && [[ "$off_us_abs" -lt 1000 ]]; then
+    check "clock.sync" "ok" "chrony, |offset|=${off_us_abs}µs"
+  elif [[ -n "$off_us_abs" ]] && [[ "$off_us_abs" -lt 10000 ]]; then
+    check "clock.sync" "warn" "chrony, |offset|=${off_us_abs}µs — fine but check Reference"
+  else
+    check "clock.sync" "fail" "chrony, |offset|=${off_us_abs}µs — significant drift"
+  fi
+elif systemctl is-active --quiet systemd-timesyncd 2>/dev/null; then
+  check "clock.sync" "warn" "systemd-timesyncd (~10–100ms drift; chrony recommended)"
+else
+  check "clock.sync" "fail" "no NTP daemon active"
 fi
 
 # JSON output

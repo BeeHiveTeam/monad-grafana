@@ -42,9 +42,11 @@ Monad Grafana installer
 Usage: sudo $0 [OPTIONS]
 
 Actions (mutually exclusive):
-  (default)             Install (interactive)
-  --upgrade             git pull + docker compose pull + up
-  --uninstall           Stop, remove, optionally clean UFW
+  (default)               Install (interactive)
+  --upgrade               git pull + docker compose pull + up
+  --uninstall             Stop, remove, optionally clean UFW
+  --enable-hostmetrics    Apply hostmetrics overlay to /etc/otelcol-contrib/config.yaml
+                          (enables CPU/memory/disk/network panels; needs otelcol restart)
 
 Options:
   --prefix=PATH         Install dir (default: /opt/monad-grafana)
@@ -64,8 +66,9 @@ while [[ $# -gt 0 ]]; do
     --local-rpc=*)     LOCAL_RPC_URL="${1#*=}";;
     --public-rpc=*)    PUBLIC_RPC_URL="${1#*=}";;
     --non-interactive) NON_INTERACTIVE=1;;
-    --uninstall)       ACTION="uninstall";;
-    --upgrade)         ACTION="upgrade";;
+    --uninstall)          ACTION="uninstall";;
+    --upgrade)            ACTION="upgrade";;
+    --enable-hostmetrics) ACTION="enable-hostmetrics";;
     -h|--help)         show_help; exit 0;;
     *) fatal "Unknown option: $1 (try --help)";;
   esac
@@ -184,6 +187,88 @@ check_existing_stack() {
         fatal "Aborted — resolve conflict manually."
       fi
     fi
+  fi
+}
+
+# ===== Optional add-ons (run after monad check, before stack) =====
+
+check_chrony() {
+  if command -v chronyc >/dev/null 2>&1 && systemctl is-active --quiet chrony; then
+    local last_offset_sec
+    last_offset_sec=$(chronyc tracking 2>/dev/null | awk -F': ' '/Last offset/ {print $2}' | awk '{print $1}')
+    ok "chrony active (offset ${last_offset_sec:-?}s)"
+    return
+  fi
+  warn "chrony not installed/active — using systemd-timesyncd or no NTP."
+  warn "systemd-timesyncd has ~10–100ms drift, which inflates vote_delay metrics by tens of ms"
+  warn "(makes 'p99 vote delay' panels look worse than reality, may cause false alerts)."
+  if confirm_default_yes "Install chrony now (replaces systemd-timesyncd)?"; then
+    apt-get install -y chrony >> "$LOG_FILE" 2>&1 \
+      && systemctl is-active --quiet chrony \
+      && ok "chrony installed and active." \
+      || warn "chrony install failed — see $LOG_FILE"
+  fi
+}
+
+check_hostmetrics() {
+  # Check whether otelcol exposes system_* metrics on :8889
+  local sample
+  sample=$(curl -fsS -m 3 http://127.0.0.1:8889/metrics 2>/dev/null | grep -c '^system_cpu_' || true)
+  if [[ "${sample:-0}" -gt 0 ]]; then
+    ok "hostmetrics receiver active (system_cpu_* metrics present)."
+    return
+  fi
+
+  warn "hostmetrics NOT enabled in /etc/otelcol-contrib/config.yaml."
+  warn "Without it, these dashboard panels will be empty:"
+  warn "  CPU usage / Load average / Memory / Swap / Disk IO / Filesystem / Network"
+  warn "Reference: $PREFIX/docs/ENABLE_HOSTMETRICS.md (after install)"
+
+  if confirm_default_yes "Apply hostmetrics overlay now? (backs up otelcol config, restarts otelcol-contrib)"; then
+    apply_hostmetrics
+  fi
+}
+
+apply_hostmetrics() {
+  local script
+  if [[ -f "$PREFIX/scripts/apply_hostmetrics_overlay.py" ]]; then
+    script="$PREFIX/scripts/apply_hostmetrics_overlay.py"
+  elif [[ -f "$(dirname "$0")/scripts/apply_hostmetrics_overlay.py" ]]; then
+    script="$(dirname "$0")/scripts/apply_hostmetrics_overlay.py"
+  else
+    err "scripts/apply_hostmetrics_overlay.py not found. Did clone fail?"
+    return 1
+  fi
+
+  # Need PyYAML for safe edit; fall back gracefully if unavailable
+  if ! python3 -c 'import yaml' 2>/dev/null; then
+    info "Installing python3-yaml for safe config edit…"
+    apt-get install -y python3-yaml >> "$LOG_FILE" 2>&1 || warn "python3-yaml install failed — script will use text fallback."
+  fi
+
+  python3 "$script" /etc/otelcol-contrib/config.yaml || { err "overlay script failed"; return 1; }
+
+  info "Restarting otelcol-contrib…"
+  systemctl restart otelcol-contrib
+  sleep 5
+
+  if systemctl is-active --quiet otelcol-contrib; then
+    ok "otelcol-contrib restarted."
+  else
+    err "otelcol-contrib failed to restart!"
+    err "  journalctl -u otelcol-contrib --since '2 min ago'"
+    err "  Restore from backup: ls /etc/otelcol-contrib/config.yaml.bak.*"
+    return 1
+  fi
+
+  # Verify hostmetrics now appearing
+  sleep 5
+  local n
+  n=$(curl -fsS -m 3 http://127.0.0.1:8889/metrics 2>/dev/null | grep -c '^system_cpu_' || true)
+  if [[ "${n:-0}" -gt 0 ]]; then
+    ok "hostmetrics confirmed — $n system_cpu_* series exposed."
+  else
+    warn "system_cpu_* still not in :8889 — check 'docker logs prometheus' or otelcol journal."
   fi
 }
 
@@ -329,11 +414,21 @@ do_install() {
   check_ports
   echo
   clone_or_update
+  echo
+  info "─── Optional but recommended ───────────────────────────"
+  check_chrony
+  check_hostmetrics
+  echo
   generate_env
   start_stack
   setup_ufw
   verify || warn "Verification incomplete — check Grafana manually after a minute."
   print_access
+}
+
+do_enable_hostmetrics() {
+  info "Applying hostmetrics overlay to /etc/otelcol-contrib/config.yaml…"
+  apply_hostmetrics
 }
 
 do_upgrade() {
@@ -389,7 +484,8 @@ do_uninstall() {
 require_root
 
 case "$ACTION" in
-  install)   do_install   ;;
-  upgrade)   do_upgrade   ;;
-  uninstall) do_uninstall ;;
+  install)             do_install             ;;
+  upgrade)             do_upgrade             ;;
+  uninstall)           do_uninstall           ;;
+  enable-hostmetrics)  do_enable_hostmetrics  ;;
 esac
