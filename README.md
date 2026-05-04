@@ -31,42 +31,87 @@ Total resource footprint: ~95 MB RAM, ~0.1% CPU. Designed not to interfere with 
 
 ---
 
-## Quick start (5 minutes)
+## Quick start — one command (recommended)
 
 ```bash
-# 1. Clone
-git clone https://github.com/YOUR-ORG/monad-grafana.git
+curl -fsSL https://raw.githubusercontent.com/BeeHiveTeam/monad-grafana/main/install.sh | sudo bash
+```
+
+The auto-installer does everything end-to-end:
+
+1. Pre-flight: OS, free disk, free ports `9090`/`3000`/`9101`
+2. **Verifies Monad is running** — `monad-bft.service`, `:8889` (otelcol), `:8080` (RPC)
+3. **Installs Docker** if missing (via official `get.docker.com`, with confirmation)
+4. **Detects existing `/opt/monitoring/`** stack and offers to stop it (container-name conflicts)
+5. Clones repo to `/opt/monad-grafana`
+6. Generates Grafana password, writes `.env` (mode `0600`)
+7. `docker compose up -d`
+8. Auto-detects Docker bridge subnet, adds **UFW allow rules** for `:8889` + `:8080`
+9. Reloads Prometheus, waits, verifies all targets `UP`
+10. Prints SSH-tunnel command + URL + admin password
+
+When done you'll see:
+
+```
+═══════════════════════════════════════════════
+  Monad Grafana stack — installed and running
+═══════════════════════════════════════════════
+
+  Open Grafana via SSH tunnel from your laptop:
+
+    ssh -L 3000:127.0.0.1:3000 -L 9090:127.0.0.1:9090 user@your.server
+
+  Then in browser:  http://localhost:3000
+
+    Login:    admin
+    Password: <generated 32-char>
+```
+
+### Manual install (review the script first)
+
+```bash
+git clone https://github.com/BeeHiveTeam/monad-grafana.git
 cd monad-grafana
-
-# 2. Generate Grafana admin password
-cp .env.example .env
-GRAFANA_PASS=$(openssl rand -base64 24 | tr -d '/+=' | head -c 32)
-sed -i "s|changeme-please-generate-strong-password|$GRAFANA_PASS|" .env
-echo "Grafana admin password: $GRAFANA_PASS"   # save it now
-chmod 600 .env
-
-# 3. Allow Docker bridge to reach Monad's otelcol :8889 and JSON-RPC :8080.
-# UFW default-deny INPUT will block the docker subnet otherwise.
-DOCKER_SUBNET=172.18.0.0/16   # default monitoring_monitoring bridge subnet
-sudo ufw allow from $DOCKER_SUBNET to any port 8889 proto tcp comment 'monitoring → otelcol'
-sudo ufw allow from $DOCKER_SUBNET to any port 8080 proto tcp comment 'monitoring → monad-rpc'
-
-# 4. Start the stack
-docker compose up -d
-
-# 5. Verify (give scrapes ~20 sec to populate)
-sleep 20
-curl -s http://127.0.0.1:9090/api/v1/targets | grep -oE '"health":"[a-z]+"'
-# expect:  "health":"up"   "health":"up"   "health":"up"
+less install.sh           # read what it does
+sudo ./install.sh
 ```
 
-Open Grafana via SSH tunnel from your laptop:
+### Installer flags
+
+```
+sudo ./install.sh --help
+sudo ./install.sh --non-interactive               # CI mode, no prompts
+sudo ./install.sh --prefix=/srv/monitoring        # custom path
+sudo ./install.sh --local-rpc=http://1.2.3.4:8080 # remote Monad RPC
+sudo ./install.sh --upgrade                       # git pull + docker pull + recreate
+sudo ./install.sh --uninstall                     # stop, remove, optionally clean UFW
+```
+
+## Health check
+
+After install, run anytime:
 
 ```bash
-ssh -L 3000:127.0.0.1:3000 -L 9090:127.0.0.1:9090 ubuntu@YOUR.NODE.IP
+/opt/monad-grafana/scripts/healthcheck.sh
+# ✓ container.prometheus: running
+# ✓ container.grafana: running
+# ✓ container.monad-rpc-exporter: running
+# ✓ prometheus.ready
+# ✓ target.monad-otelcol
+# ✓ target.monad-rpc-exporter
+# ✓ target.prometheus
+# ✓ sync.gap: 0 blocks
+# ✓ block.age: 4s
+# ✓ grafana.health
+
+./scripts/healthcheck.sh --quiet --json   # CI / cron / piped
 ```
 
-Then browse to <http://localhost:3000>, login `admin` / `<the password from step 2>`. Dashboard «Monad Node — Overview» loads automatically.
+Returns exit `0` if everything is healthy, `1` otherwise. Add to cron for periodic check:
+
+```cron
+*/5 * * * * /opt/monad-grafana/scripts/healthcheck.sh --quiet || systemctl --user notify-send "Monad mon: degraded"
+```
 
 ---
 
