@@ -110,6 +110,19 @@ check_disk() {
   ok "Disk: ${free_gb} GB free on /"
 }
 
+check_ram() {
+  local total_mb avail_mb
+  total_mb=$(free -m | awk '/^Mem:/ {print $2}')
+  avail_mb=$(free -m | awk '/^Mem:/ {print $7}')
+  # Stack reserves: prometheus 512m + grafana 512m + exporter 64m = ~1.1 GB
+  if (( avail_mb < 512 )); then
+    warn "Available RAM: ${avail_mb} MB — stack needs ~1.1 GB (prometheus 512m + grafana 512m + exporter 64m)."
+    warn "Node may OOM kill containers under load."
+  else
+    ok "RAM: ${avail_mb} MB available (total: ${total_mb} MB)."
+  fi
+}
+
 check_ports() {
   local conflict=0
   for p in 9090 3000 9101; do
@@ -132,12 +145,28 @@ check_monad() {
     || fatal ":8889 not listening — Monad's bundled otelcol-contrib must be running and exposing Prometheus metrics."
   ok "otelcol metrics endpoint :8889 listening."
 
+  # RPC reachability is best-effort — validator-only setups may not run monad-rpc.service.
   if ! curl -fsS -m 3 -X POST http://127.0.0.1:8080 \
        -H 'Content-Type: application/json' \
        -d '{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]}' >/dev/null 2>&1; then
-    fatal "Monad RPC :8080 not responding to eth_blockNumber."
+    warn "Monad RPC :8080 not responding on 127.0.0.1."
+    warn "  → If monad-rpc.service is not running (validator-only setup), ignore this."
+    warn "  → Otherwise: check 'systemctl status monad-rpc' and re-run, or set LOCAL_RPC_URL in .env after install."
+    warn "  monad_local_block_number will read 0 until RPC is reachable from Docker."
+  else
+    # RPC responds on loopback — check binding so Docker exporter (uses host.docker.internal,
+    # which resolves to the Docker bridge IP, NOT 127.0.0.1) can actually reach it.
+    if ss -tln 2>/dev/null | grep -qE "127\.0\.0\.1:8080\b" \
+       && ! ss -tln 2>/dev/null | grep -qE "(0\.0\.0\.0|\*):8080\b"; then
+      warn "RPC :8080 is bound to 127.0.0.1 only."
+      warn "  The exporter inside Docker uses host.docker.internal (→ bridge IP), not 127.0.0.1."
+      warn "  Block height will read 0. Fix options:"
+      warn "    a) Set LOCAL_RPC_URL=http://<bridge-ip>:8080 in $PREFIX/.env after install."
+      warn "    b) Rebind RPC: add 'Environment=--rpc.listen-addr=0.0.0.0:8080' to monad-rpc.service."
+    else
+      ok "Monad RPC :8080 reachable."
+    fi
   fi
-  ok "Monad RPC :8080 reachable."
 }
 
 check_docker() {
@@ -152,6 +181,14 @@ check_docker() {
     else
       fatal "Docker is required. Install manually then re-run."
     fi
+  fi
+  # host-gateway support (required for host.docker.internal) needs Docker ≥20.10
+  local docker_ver_str docker_maj docker_min
+  docker_ver_str=$(docker --version | grep -oE '[0-9]+\.[0-9]+' | head -1)
+  docker_maj=${docker_ver_str%%.*}
+  docker_min=${docker_ver_str##*.}
+  if (( docker_maj < 20 || (docker_maj == 20 && docker_min < 10) )); then
+    fatal "Docker ≥20.10 required for host-gateway (extra_hosts) support (have ${docker_ver_str}). Upgrade Docker and re-run."
   fi
   if ! docker compose version >/dev/null 2>&1; then
     warn "docker compose plugin missing — installing docker-compose-plugin…"
@@ -273,6 +310,17 @@ apply_hostmetrics() {
 }
 
 # ===== Install steps =====
+
+configure_prometheus() {
+  local prom="$PREFIX/prometheus/prometheus.yml"
+  local h
+  h=$(hostname -s 2>/dev/null || hostname)
+  # Replace placeholder only — preserves any manual edits on re-run
+  if grep -q 'host: monad-node' "$prom"; then
+    sed -i "s/host: monad-node/host: ${h//\//\\/}/" "$prom"
+    ok "Prometheus external_labels: host=$h"
+  fi
+}
 
 clone_or_update() {
   if [[ -d "$PREFIX/.git" ]]; then
@@ -408,12 +456,14 @@ do_install() {
   echo
   check_os
   check_disk
+  check_ram
   check_monad
   check_docker
   check_existing_stack
   check_ports
   echo
   clone_or_update
+  configure_prometheus
   echo
   info "─── Optional but recommended ───────────────────────────"
   check_chrony
@@ -460,11 +510,16 @@ do_uninstall() {
 
   if command -v ufw >/dev/null && ufw status >/dev/null 2>&1; then
     if confirm "Remove UFW rules with comment 'monad-grafana'?"; then
-      while true; do
+      local _ufw_attempts=0
+      while [[ $_ufw_attempts -lt 30 ]]; do
         local n
         n=$(ufw status numbered 2>/dev/null | grep 'monad-grafana' | head -1 | awk -F'[][]' '{print $2}')
         [[ -z "$n" ]] && break
-        yes y | ufw delete "$n" >/dev/null 2>&1 || break
+        if ! yes y | ufw delete "$n" >/dev/null 2>&1; then
+          warn "Failed to delete UFW rule $n — remove manually: sudo ufw delete $n"
+          break
+        fi
+        _ufw_attempts=$(( _ufw_attempts + 1 ))
       done
       ok "UFW rules removed."
     fi

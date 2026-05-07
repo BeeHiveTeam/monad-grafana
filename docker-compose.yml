@@ -21,6 +21,11 @@ services:
     networks: [monitoring]
     mem_limit: 512m
     cpus: 1.0
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   grafana:
     image: grafana/grafana:11.3.0
@@ -48,11 +53,17 @@ services:
     networks: [monitoring]
     mem_limit: 512m
     cpus: 0.5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   monad-rpc-exporter:
     image: python:3.12-alpine
     container_name: monad-rpc-exporter
     restart: unless-stopped
+    user: "65534:65534"
     pid: host
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -67,6 +78,11 @@ services:
     networks: [monitoring]
     mem_limit: 64m
     cpus: 0.1
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
   monitoring:

@@ -145,15 +145,21 @@ fi
 
 # JSON output
 if [[ $JSON -eq 1 ]]; then
-  python3 -c "
-import json
-result = {}
-$(for k in "${!RESULT[@]}"; do
-  group=${k%.*}; field=${k##*.}
-  echo "result.setdefault('$group', {})['$field'] = ${RESULT[$k]@Q}"
-done)
-print(json.dumps({'overall': 'ok' if $EXIT == 0 else 'fail', 'checks': result}, indent=2))
-"
+  _hc_tmp=$(mktemp)
+  for k in "${!RESULT[@]}"; do
+    printf '%s\t%s\n' "$k" "${RESULT[$k]}"
+  done > "$_hc_tmp"
+  python3 - "$_hc_tmp" "$EXIT" <<'PYEOF'
+import json, sys
+checks = {}
+with open(sys.argv[1]) as f:
+    for line in f:
+        k, _, v = line.rstrip('\n').partition('\t')
+        group, _, field = k.rpartition('.')
+        checks.setdefault(group, {})[field] = v
+print(json.dumps({'overall': 'ok' if sys.argv[2] == '0' else 'fail', 'checks': checks}, indent=2))
+PYEOF
+  rm -f "$_hc_tmp"
 fi
 
 exit $EXIT

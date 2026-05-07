@@ -122,7 +122,7 @@ After install, run anytime:
 Returns exit `0` if everything is healthy, `1` otherwise. Add to cron for periodic check:
 
 ```cron
-*/5 * * * * /opt/monad-grafana/scripts/healthcheck.sh --quiet || systemctl --user notify-send "Monad mon: degraded"
+*/5 * * * * /opt/monad-grafana/scripts/healthcheck.sh --quiet 2>&1 | logger -t monad-mon
 ```
 
 ---
