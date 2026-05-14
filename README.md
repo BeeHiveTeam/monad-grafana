@@ -11,7 +11,7 @@ Built on top of the **OpenTelemetry collector that Monad already bundles** with 
 
 ## What you get
 
-- **Prometheus** (port `9090`, loopback-only) — scrapes Monad's bundled `otelcol-contrib` on `:8889` plus a sidecar RPC exporter. 30 days / 10 GB retention.
+- **Prometheus** (port `9090`, loopback-only) — scrapes the OpenTelemetry collector exposing Prometheus metrics on `:8889` plus a sidecar RPC exporter. 30 days / 10 GB retention. The Monad `apt` package installs plain `otelcol`; this stack expects **`otelcol-contrib`** for the journald receivers used by error-panels (`apt install otelcol-contrib` if you only have plain).
 - **Grafana** (port `3000`, loopback-only) — Prometheus pre-provisioned as default datasource, dashboard auto-loaded on startup.
 - **monad-rpc-exporter** (port `9101`, loopback-only) — Python 3 sidecar (stdlib only, no pip deps) that polls JSON-RPC for block height + sync gap, reads `/proc` for service uptime. Runs as `nobody` (uid 65534) — not root.
 - **47-panel dashboard** with sections: Sync · Service uptime / peers · Vote delay · System resources · Disk · TxPool / Raptorcast · Errors / failures. **Datasource templated** — works with multiple Prometheus instances. **No hardcoded device/interface names** — adapts to whatever NVMe/NIC names your host uses.
@@ -23,7 +23,7 @@ Total resource footprint: ~95 MB RAM, ~0.1% CPU. Designed not to interfere with 
 ## Requirements
 
 - Linux x86_64 host running a Monad node with `monad-bft.service`, `monad-execution.service`, `monad-rpc.service`
-- Monad's bundled `otelcol-contrib` running and exposing Prometheus metrics on `:8889` (default Monad install does this)
+- An OpenTelemetry collector exposing Prometheus metrics on `:8889`. **Monad apt installs plain `otelcol`** — the hostmetrics overlay and journald log pipelines this stack uses target `otelcol-contrib` (`apt install otelcol-contrib`; both can be installed side-by-side, the contrib service then takes over `:8889`).
 - Docker 20+ with `docker compose` plugin (auto-installed by `install.sh` if missing)
 - ~1 GB free disk for Prometheus data (30-day retention)
 - `sudo` for initial `ufw` rule and otelcol config edit
@@ -31,11 +31,17 @@ Total resource footprint: ~95 MB RAM, ~0.1% CPU. Designed not to interfere with 
 
 ### Heads-up on the default Monad config
 
-The bundled `/etc/otelcol-contrib/config.yaml` shipped with the `monad` apt package only forwards `monad_*` metrics from the node (vote delay, consensus events, peers, txpool). It does **not** include the **`hostmetrics`** receiver, so without an overlay these dashboard panels will be empty:
+The bundled OTel config (`/etc/otelcol/config.yaml` for plain `otelcol`, or `/etc/otelcol-contrib/config.yaml` if you switched) only forwards `monad_*` metrics from the node (vote delay, consensus events, peers, txpool). It does **not** include the **`hostmetrics`** receiver, so without an overlay these dashboard panels will be empty:
 
 > CPU usage / Load average / Memory / Swap / Disk IO / Filesystem usage / Network errors
 
 The auto-installer detects this gap and offers to apply a one-time overlay (with backup + restart). You can also run it later: `sudo /opt/monad-grafana/install.sh --enable-hostmetrics`. See [`docs/ENABLE_HOSTMETRICS.md`](docs/ENABLE_HOSTMETRICS.md) for the manual procedure if you'd rather review-then-apply by hand.
+
+### Heads-up on VDP OTel push (May 2026 onward)
+
+If you've enabled the MF VDP push (see [BeeHive monad-tools `docs/vdp-otel-push.md`](https://github.com/BeeHiveTeam/monad-tools/blob/main/docs/vdp-otel-push.md)), your OTel collector pushes `monad_*` metrics to `otel-external.monadinfra.com:443`. This stack continues to work alongside: VDP push is a **second exporter** in the same pipeline, the local Prometheus exporter on `:8889` stays available for our Grafana to scrape.
+
+If you run a custom `otelcol-contrib` with `journald → Loki` plus VDP push (our recommended split-pipelines pattern), this stack also works — it just scrapes `:8889` regardless of how many other exporters are attached. The hostmetrics overlay shipped here is compatible with both setups.
 
 ### Heads-up on NTP
 
