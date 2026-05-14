@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """
-Idempotently add a `hostmetrics` receiver to /etc/otelcol-contrib/config.yaml
-and reference it from the metrics pipeline.
+Idempotently add a `hostmetrics` receiver to an OTel collector config and
+reference it from the metrics pipeline. Works with both plain `otelcol`
+(/etc/otelcol/config.yaml) and `otelcol-contrib` (/etc/otelcol-contrib/config.yaml).
 
 Usage:
   sudo python3 apply_hostmetrics_overlay.py [/path/to/config.yaml]
 
-Default path: /etc/otelcol-contrib/config.yaml
+When no path is given, picks /etc/otelcol-contrib/config.yaml if it exists,
+otherwise /etc/otelcol/config.yaml.
+
 Behaviour:
   - Backs up to <config>.bak.<unix-ts> first
   - No-op if hostmetrics already in receivers
@@ -16,7 +19,13 @@ Falls back to plain text manipulation if PyYAML is not installed.
 """
 import os, sys, shutil, time
 
-CONFIG = sys.argv[1] if len(sys.argv) > 1 else '/etc/otelcol-contrib/config.yaml'
+def _default_config():
+    for path in ('/etc/otelcol-contrib/config.yaml', '/etc/otelcol/config.yaml'):
+        if os.path.isfile(path):
+            return path
+    return '/etc/otelcol-contrib/config.yaml'  # let downstream fail with clear msg
+
+CONFIG = sys.argv[1] if len(sys.argv) > 1 else _default_config()
 
 HOSTMETRICS_BLOCK = """
   hostmetrics:
