@@ -11,7 +11,7 @@ Built on top of the **OpenTelemetry collector that Monad already bundles** with 
 
 ## What you get
 
-- **Prometheus** (port `9090`, loopback-only) — scrapes the OpenTelemetry collector exposing Prometheus metrics on `:8889` plus a sidecar RPC exporter. 30 days / 10 GB retention. The Monad `apt` package installs plain `otelcol`; this stack expects **`otelcol-contrib`** for the journald receivers used by error-panels (`apt install otelcol-contrib` if you only have plain).
+- **Prometheus** (port `9090`, loopback-only) — scrapes the OpenTelemetry collector exposing Prometheus metrics on `:8889` plus a sidecar RPC exporter. 30 days / 10 GB retention. **Works with either plain `otelcol`** (Monad apt default) **or `otelcol-contrib`** (richer receivers — required only if you want to ship logs to Loki via the journald receiver). The installer auto-detects which is active and operates on the matching config path; override with `OTELCOL_SVC=otelcol-contrib` if both are present.
 - **Grafana** (port `3000`, loopback-only) — Prometheus pre-provisioned as default datasource, dashboard auto-loaded on startup.
 - **monad-rpc-exporter** (port `9101`, loopback-only) — Python 3 sidecar (stdlib only, no pip deps) that polls JSON-RPC for block height + sync gap, reads `/proc` for service uptime. Runs as `nobody` (uid 65534) — not root.
 - **47-panel dashboard** with sections: Sync · Service uptime / peers · Vote delay · System resources · Disk · TxPool / Raptorcast · Errors / failures. **Datasource templated** — works with multiple Prometheus instances. **No hardcoded device/interface names** — adapts to whatever NVMe/NIC names your host uses.
@@ -23,7 +23,7 @@ Total resource footprint: ~95 MB RAM, ~0.1% CPU. Designed not to interfere with 
 ## Requirements
 
 - Linux x86_64 host running a Monad node with `monad-bft.service`, `monad-execution.service`, `monad-rpc.service`
-- An OpenTelemetry collector exposing Prometheus metrics on `:8889`. **Monad apt installs plain `otelcol`** — the hostmetrics overlay and journald log pipelines this stack uses target `otelcol-contrib` (`apt install otelcol-contrib`; both can be installed side-by-side, the contrib service then takes over `:8889`).
+- An OpenTelemetry collector exposing Prometheus metrics on `:8889`. **Monad apt installs plain `otelcol`** — that's the default and works out of the box for this stack. The installer auto-detects which OTel collector is active (`otelcol` or `otelcol-contrib`) and edits the correct config path when applying the hostmetrics overlay. If you want **journald → Loki** log pipelines (the contrib-only receiver), install `otelcol-contrib` separately (`apt install otelcol-contrib`).
 - Docker 20+ with `docker compose` plugin (auto-installed by `install.sh` if missing)
 - ~1 GB free disk for Prometheus data (30-day retention)
 - `sudo` for initial `ufw` rule and otelcol config edit

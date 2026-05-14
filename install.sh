@@ -21,6 +21,12 @@ NON_INTERACTIVE="${NON_INTERACTIVE:-0}"
 ACTION="install"
 LOG_FILE="/tmp/monad-grafana-install-$(date +%Y%m%d-%H%M%S).log"
 
+# Detected at runtime by detect_otelcol() — populated before any otelcol op.
+# Override via env: OTELCOL_SVC=otelcol-contrib (or otelcol). The matching config
+# path is derived; override OTELCOL_CONFIG only if you've moved the file.
+OTELCOL_SVC="${OTELCOL_SVC:-}"
+OTELCOL_CONFIG="${OTELCOL_CONFIG:-}"
+
 # ===== Colors (only if TTY) =====
 if [[ -t 1 ]]; then
   C_RED=$'\e[31m'; C_GREEN=$'\e[32m'; C_YELLOW=$'\e[33m'
@@ -45,7 +51,9 @@ Actions (mutually exclusive):
   (default)               Install (interactive)
   --upgrade               git pull + docker compose pull + up
   --uninstall             Stop, remove, optionally clean UFW
-  --enable-hostmetrics    Apply hostmetrics overlay to /etc/otelcol-contrib/config.yaml
+  --enable-hostmetrics    Apply hostmetrics overlay to the active otelcol config
+                          (auto-detects otelcol vs otelcol-contrib;
+                           pin via OTELCOL_SVC=... if both are present)
                           (enables CPU/memory/disk/network panels; needs otelcol restart)
 
 Options:
@@ -95,6 +103,53 @@ confirm_default_yes() {
   [[ ! "$ans" =~ ^[Nn]$ ]]
 }
 
+# Identify which OTel collector service is the active one on this host.
+# Monad's apt package installs plain `otelcol` (and ships /etc/otelcol/config.yaml).
+# Operators sometimes install `otelcol-contrib` for richer receivers (e.g. journald
+# for logs-to-Loki); when active, contrib reads /etc/otelcol-contrib/config.yaml.
+#
+# We prefer the *active* service so operations apply where they take effect.
+# Tie-breaker if both somehow active: prefer otelcol-contrib (richer, more likely
+# what the operator actually intended).
+#
+# Sets OTELCOL_SVC and OTELCOL_CONFIG. Honours overrides set in env.
+detect_otelcol() {
+  if [[ -n "$OTELCOL_SVC" && -n "$OTELCOL_CONFIG" ]]; then
+    info "OTel collector pinned via env: $OTELCOL_SVC ($OTELCOL_CONFIG)"
+    return 0
+  fi
+
+  local active=()
+  for svc in otelcol-contrib otelcol; do
+    if systemctl is-active --quiet "$svc" 2>/dev/null; then
+      active+=("$svc")
+    fi
+  done
+
+  if (( ${#active[@]} == 0 )); then
+    err "No OTel collector service active. The Monad apt package ships 'otelcol' — enable it:"
+    err "  sudo systemctl enable --now otelcol"
+    err "Or install 'otelcol-contrib' for journald log-pipeline support."
+    return 1
+  fi
+
+  OTELCOL_SVC="${active[0]}"
+  case "$OTELCOL_SVC" in
+    otelcol)         OTELCOL_CONFIG="/etc/otelcol/config.yaml" ;;
+    otelcol-contrib) OTELCOL_CONFIG="/etc/otelcol-contrib/config.yaml" ;;
+  esac
+
+  if (( ${#active[@]} > 1 )); then
+    warn "Both otelcol and otelcol-contrib are active — using $OTELCOL_SVC (pin with OTELCOL_SVC=... to override)"
+  fi
+
+  if [[ ! -f "$OTELCOL_CONFIG" ]]; then
+    err "$OTELCOL_SVC.service active but config $OTELCOL_CONFIG missing — package may be broken"
+    return 1
+  fi
+  ok "OTel collector: $OTELCOL_SVC ($OTELCOL_CONFIG)"
+}
+
 # ===== Pre-flight checks =====
 
 check_os() {
@@ -141,9 +196,11 @@ check_monad() {
     || fatal "monad-bft.service not active. This installer is for Monad node operators only."
   ok "monad-bft.service active."
 
+  detect_otelcol || fatal "OTel collector not detected. See messages above."
+
   ss -tln 2>/dev/null | grep -qE ":8889\b" \
-    || fatal ":8889 not listening — Monad's bundled otelcol-contrib must be running and exposing Prometheus metrics."
-  ok "otelcol metrics endpoint :8889 listening."
+    || fatal ":8889 not listening — $OTELCOL_SVC must expose Prometheus metrics on this port (check $OTELCOL_CONFIG)."
+  ok "OTel metrics endpoint :8889 listening."
 
   # RPC reachability is best-effort — validator-only setups may not run monad-rpc.service.
   if ! curl -fsS -m 3 -X POST http://127.0.0.1:8080 \
@@ -256,12 +313,12 @@ check_hostmetrics() {
     return
   fi
 
-  warn "hostmetrics NOT enabled in /etc/otelcol-contrib/config.yaml."
+  warn "hostmetrics NOT enabled in $OTELCOL_CONFIG."
   warn "Without it, these dashboard panels will be empty:"
   warn "  CPU usage / Load average / Memory / Swap / Disk IO / Filesystem / Network"
   warn "Reference: $PREFIX/docs/ENABLE_HOSTMETRICS.md (after install)"
 
-  if confirm_default_yes "Apply hostmetrics overlay now? (backs up otelcol config, restarts otelcol-contrib)"; then
+  if confirm_default_yes "Apply hostmetrics overlay now? (backs up otelcol config, restarts $OTELCOL_SVC)"; then
     apply_hostmetrics
   fi
 }
@@ -283,18 +340,18 @@ apply_hostmetrics() {
     apt-get install -y python3-yaml >> "$LOG_FILE" 2>&1 || warn "python3-yaml install failed — script will use text fallback."
   fi
 
-  python3 "$script" /etc/otelcol-contrib/config.yaml || { err "overlay script failed"; return 1; }
+  python3 "$script" "$OTELCOL_CONFIG" || { err "overlay script failed"; return 1; }
 
-  info "Restarting otelcol-contrib…"
-  systemctl restart otelcol-contrib
+  info "Restarting $OTELCOL_SVC…"
+  systemctl restart "$OTELCOL_SVC"
   sleep 5
 
-  if systemctl is-active --quiet otelcol-contrib; then
-    ok "otelcol-contrib restarted."
+  if systemctl is-active --quiet "$OTELCOL_SVC"; then
+    ok "$OTELCOL_SVC restarted."
   else
-    err "otelcol-contrib failed to restart!"
-    err "  journalctl -u otelcol-contrib --since '2 min ago'"
-    err "  Restore from backup: ls /etc/otelcol-contrib/config.yaml.bak.*"
+    err "$OTELCOL_SVC failed to restart!"
+    err "  journalctl -u $OTELCOL_SVC --since '2 min ago'"
+    err "  Restore from backup: ls ${OTELCOL_CONFIG}.bak.*"
     return 1
   fi
 
@@ -477,7 +534,8 @@ do_install() {
 }
 
 do_enable_hostmetrics() {
-  info "Applying hostmetrics overlay to /etc/otelcol-contrib/config.yaml…"
+  detect_otelcol || fatal "OTel collector not detected — cannot apply overlay."
+  info "Applying hostmetrics overlay to $OTELCOL_CONFIG…"
   apply_hostmetrics
 }
 
