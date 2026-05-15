@@ -49,7 +49,10 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports:
-      - "127.0.0.1:3000:3000"
+      # Bind interface controlled via GRAFANA_BIND in .env:
+      #   127.0.0.1 (default, SSH-tunnel access only — safer)
+      #   0.0.0.0   (public LAN/internet access — install.sh --public sets this)
+      - "${GRAFANA_BIND:-127.0.0.1}:3000:3000"
     networks: [monitoring]
     mem_limit: 512m
     cpus: 0.5
