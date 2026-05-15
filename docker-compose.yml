@@ -62,6 +62,38 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # node_exporter — Prometheus standard for host-level metrics.
+  # Required because docs.monad.xyz mandates the Core `otelcol` distribution
+  # (no hostmetrics receiver). Runs with network_mode: host + pid: host so
+  # /proc reads see the real host kernel, not the container namespace.
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: node-exporter
+    restart: unless-stopped
+    pid: host
+    network_mode: host
+    command:
+      # Mount host root readonly; rootfs flag tells the collector where to read.
+      - --path.rootfs=/host
+      - --collector.systemd
+      # Reduce noise: ignore cgroup-internal mounts / virtual filesystems.
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+      - --collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$$
+      # NIC stats from /sys/class/net.
+      - --collector.netdev
+      # Disk I/O — critical for TrieDB performance visibility.
+      - --collector.diskstats
+      - --web.listen-address=127.0.0.1:9100
+    volumes:
+      - /:/host:ro,rslave
+    mem_limit: 64m
+    cpus: 0.1
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   monad-rpc-exporter:
     image: python:3.12-alpine
     container_name: monad-rpc-exporter

@@ -882,7 +882,7 @@
       },
       "targets": [
         {
-          "expr": "100 * (1 - avg(system_cpu_utilization_ratio{state=\"idle\"}))",
+          "expr": "100 * (1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[1m])))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -927,7 +927,7 @@
       },
       "targets": [
         {
-          "expr": "system_cpu_load_average_1m",
+          "expr": "node_load1",
           "legendFormat": "1m",
           "datasource": {
             "type": "prometheus",
@@ -935,7 +935,7 @@
           }
         },
         {
-          "expr": "system_cpu_load_average_5m",
+          "expr": "node_load5",
           "legendFormat": "5m",
           "datasource": {
             "type": "prometheus",
@@ -943,7 +943,7 @@
           }
         },
         {
-          "expr": "system_cpu_load_average_15m",
+          "expr": "node_load15",
           "legendFormat": "15m",
           "datasource": {
             "type": "prometheus",
@@ -985,8 +985,24 @@
       },
       "targets": [
         {
-          "expr": "system_memory_usage_bytes",
-          "legendFormat": "{{state}}",
+          "expr": "node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes",
+          "legendFormat": "used",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          }
+        },
+        {
+          "expr": "node_memory_MemAvailable_bytes",
+          "legendFormat": "available",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          }
+        },
+        {
+          "expr": "node_memory_Cached_bytes + node_memory_Buffers_bytes",
+          "legendFormat": "cached+buffered",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -1038,7 +1054,7 @@
       },
       "targets": [
         {
-          "expr": "100 * sum(system_paging_usage_bytes{state=\"used\"}) / clamp_min(sum(system_paging_usage_bytes{state=~\"used|free\"}), 1)",
+          "expr": "100 * (node_memory_SwapTotal_bytes - node_memory_SwapFree_bytes) / clamp_min(node_memory_SwapTotal_bytes, 1)",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -1072,7 +1088,7 @@
       "id": 35,
       "targets": [
         {
-          "expr": "sum by (state) (system_cpu_utilization_ratio)",
+          "expr": "sum by (mode) (rate(node_cpu_seconds_total{mode!=\"idle\"}[1m]))",
           "legendFormat": "{{state}}",
           "datasource": {
             "type": "prometheus",
@@ -1102,7 +1118,7 @@
       "id": 36,
       "targets": [
         {
-          "expr": "system_memory_usage_bytes{state=\"used\"}",
+          "expr": "node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes",
           "legendFormat": "mem used",
           "datasource": {
             "type": "prometheus",
@@ -1110,7 +1126,7 @@
           }
         },
         {
-          "expr": "system_memory_usage_bytes{state=\"cached\"}",
+          "expr": "node_memory_Cached_bytes + node_memory_Buffers_bytes",
           "legendFormat": "mem cached",
           "datasource": {
             "type": "prometheus",
@@ -1118,7 +1134,7 @@
           }
         },
         {
-          "expr": "sum(system_paging_usage_bytes{state=\"used\"})",
+          "expr": "node_memory_SwapTotal_bytes - node_memory_SwapFree_bytes",
           "legendFormat": "swap used",
           "datasource": {
             "type": "prometheus",
@@ -1159,7 +1175,7 @@
       "id": 41,
       "targets": [
         {
-          "expr": "rate(system_disk_io_bytes_total{device!~\"loop[0-9]*|sr[0-9]*|ram[0-9]*|dm-[0-9]*\"}[1m])",
+          "expr": "rate(node_disk_read_bytes_total{device!~\"loop[0-9]*|sr[0-9]*|ram[0-9]*|dm-[0-9]*\"}[1m]) + rate(node_disk_written_bytes_total{device!~\"loop[0-9]*|sr[0-9]*|ram[0-9]*|dm-[0-9]*\"}[1m])",
           "legendFormat": "{{device}} {{direction}}",
           "datasource": {
             "type": "prometheus",
@@ -1189,7 +1205,7 @@
       "id": 42,
       "targets": [
         {
-          "expr": "rate(system_disk_operations_total{device!~\"loop[0-9]*|sr[0-9]*|ram[0-9]*|dm-[0-9]*\"}[1m])",
+          "expr": "rate(node_disk_reads_completed_total{device!~\"loop[0-9]*|sr[0-9]*|ram[0-9]*|dm-[0-9]*\"}[1m]) + rate(node_disk_writes_completed_total{device!~\"loop[0-9]*|sr[0-9]*|ram[0-9]*|dm-[0-9]*\"}[1m])",
           "legendFormat": "{{device}} {{direction}}",
           "datasource": {
             "type": "prometheus",
@@ -1219,7 +1235,7 @@
       "id": 43,
       "targets": [
         {
-          "expr": "system_disk_pending_operations{device!~\"loop[0-9]*|sr[0-9]*|ram[0-9]*|dm-[0-9]*\"}",
+          "expr": "node_disk_io_now{device!~\"loop[0-9]*|sr[0-9]*|ram[0-9]*|dm-[0-9]*\"}",
           "legendFormat": "{{device}}",
           "datasource": {
             "type": "prometheus",
@@ -1272,7 +1288,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (mountpoint) (system_filesystem_usage_bytes{state=\"used\"}) / sum by (mountpoint) (system_filesystem_usage_bytes{state=~\"used|free\"})",
+          "expr": "1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes)",
           "legendFormat": "{{mountpoint}}",
           "datasource": {
             "type": "prometheus",
@@ -1303,7 +1319,7 @@
       "id": 45,
       "targets": [
         {
-          "expr": "system_filesystem_usage_bytes{state=\"free\",mountpoint=\"/\"}",
+          "expr": "node_filesystem_avail_bytes{mountpoint=\"/\"}",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -1992,7 +2008,7 @@
       "id": 65,
       "targets": [
         {
-          "expr": "rate(system_network_dropped_total{device!~\"lo|veth.*|docker.*|br-.*\"}[5m])",
+          "expr": "rate(node_network_receive_drop_total{device!~\"lo|veth.*|docker.*|br-.*\"}[5m]) + rate(node_network_transmit_drop_total{device!~\"lo|veth.*|docker.*|br-.*\"}[5m])",
           "legendFormat": "dropped {{direction}}",
           "datasource": {
             "type": "prometheus",
@@ -2000,7 +2016,7 @@
           }
         },
         {
-          "expr": "rate(system_network_errors_total{device!~\"lo|veth.*|docker.*|br-.*\"}[5m])",
+          "expr": "rate(node_network_receive_errs_total{device!~\"lo|veth.*|docker.*|br-.*\"}[5m]) + rate(node_network_transmit_errs_total{device!~\"lo|veth.*|docker.*|br-.*\"}[5m])",
           "legendFormat": "errors {{direction}}",
           "datasource": {
             "type": "prometheus",
@@ -2030,7 +2046,7 @@
       "id": 66,
       "targets": [
         {
-          "expr": "rate(system_network_io_bytes_total{device!~\"lo|veth.*|docker.*|br-.*\"}[1m])",
+          "expr": "rate(node_network_receive_bytes_total{device!~\"lo|veth.*|docker.*|br-.*\"}[1m]) + rate(node_network_transmit_bytes_total{device!~\"lo|veth.*|docker.*|br-.*\"}[1m])",
           "legendFormat": "{{direction}} Bps",
           "datasource": {
             "type": "prometheus",
