@@ -17,6 +17,7 @@ PREFIX="${PREFIX:-/opt/monad-grafana}"
 REPO_URL="${REPO_URL:-https://github.com/BeeHiveTeam/monad-grafana.git}"
 LOCAL_RPC_URL="${LOCAL_RPC_URL:-http://host.docker.internal:8080}"
 PUBLIC_RPC_URL="${PUBLIC_RPC_URL:-https://testnet-rpc.monad.xyz}"
+PUBLIC_ACCESS="${PUBLIC_ACCESS:-0}"      # 1 = bind Grafana on 0.0.0.0:3000 + open UFW :3000/tcp
 NON_INTERACTIVE="${NON_INTERACTIVE:-0}"
 ACTION="install"
 LOG_FILE="/tmp/monad-grafana-install-$(date +%Y%m%d-%H%M%S).log"
@@ -60,10 +61,15 @@ Options:
   --prefix=PATH         Install dir (default: /opt/monad-grafana)
   --local-rpc=URL       Monad RPC URL (default: http://host.docker.internal:8080)
   --public-rpc=URL      Public RPC for sync gap (default: https://testnet-rpc.monad.xyz)
+  --public              Bind Grafana on 0.0.0.0:3000 + open UFW :3000/tcp.
+                        Lets anyone reach http://<server-ip>:3000 and log in
+                        with admin / <generated password>. Without this flag
+                        Grafana listens on 127.0.0.1 only (SSH-tunnel access).
   --non-interactive     Skip prompts, abort on conflicts (for CI)
   -h, --help            Show this
 
-Environment variables override flags: PREFIX, LOCAL_RPC_URL, PUBLIC_RPC_URL, NON_INTERACTIVE.
+Environment variables override flags: PREFIX, LOCAL_RPC_URL, PUBLIC_RPC_URL,
+PUBLIC_ACCESS, NON_INTERACTIVE.
 EOF
 }
 
@@ -73,6 +79,7 @@ while [[ $# -gt 0 ]]; do
     --prefix=*)        PREFIX="${1#*=}";;
     --local-rpc=*)     LOCAL_RPC_URL="${1#*=}";;
     --public-rpc=*)    PUBLIC_RPC_URL="${1#*=}";;
+    --public)          PUBLIC_ACCESS=1;;
     --non-interactive) NON_INTERACTIVE=1;;
     --uninstall)          ACTION="uninstall";;
     --upgrade)            ACTION="upgrade";;
@@ -410,7 +417,29 @@ EOF
   ok "Generated $PREFIX/.env (mode 600)."
 }
 
+apply_grafana_bind() {
+  # docker-compose.yml uses ${GRAFANA_BIND:-127.0.0.1} for the Grafana port
+  # binding. Set it explicitly in .env so the operator's choice survives
+  # restarts and `install.sh --upgrade` (which calls `docker compose up -d`).
+  local env="$PREFIX/.env"
+  local desired
+  if (( PUBLIC_ACCESS == 1 )); then
+    desired="0.0.0.0"
+  else
+    desired="127.0.0.1"
+  fi
+  # Drop any prior GRAFANA_BIND line and append the current choice.
+  if [[ -f "$env" ]]; then
+    sed -i '/^GRAFANA_BIND=/d' "$env"
+    printf 'GRAFANA_BIND=%s\n' "$desired" >> "$env"
+  fi
+  if (( PUBLIC_ACCESS == 1 )); then
+    ok "Grafana bind set to 0.0.0.0:3000 (public access enabled)"
+  fi
+}
+
 start_stack() {
+  apply_grafana_bind
   info "Starting docker compose…"
   (cd "$PREFIX" && docker compose up -d) >> "$LOG_FILE" 2>&1
   ok "Containers started."
@@ -437,6 +466,12 @@ setup_ufw() {
   ufw allow from "$subnet" to any port 8889 proto tcp comment 'monad-grafana → otelcol' >> "$LOG_FILE" 2>&1 || true
   ufw allow from "$subnet" to any port 8080 proto tcp comment 'monad-grafana → monad-rpc' >> "$LOG_FILE" 2>&1 || true
   ok "UFW rules added for subnet $subnet."
+
+  if (( PUBLIC_ACCESS == 1 )); then
+    info "Opening UFW :3000/tcp (--public — Grafana reachable from anywhere)…"
+    ufw allow 3000/tcp comment 'monad-grafana web UI (public)' >> "$LOG_FILE" 2>&1 || true
+    ok "UFW :3000/tcp open."
+  fi
 }
 
 verify() {
@@ -482,6 +517,28 @@ ${C_GREEN}${C_BOLD}════════════════════�
   Monad Grafana stack — installed and running
 ═══════════════════════════════════════════════${C_RESET}
 
+EOF
+
+  if (( PUBLIC_ACCESS == 1 )); then
+    cat <<EOF
+  ${C_BOLD}${C_YELLOW}Public access ENABLED${C_RESET} — Grafana reachable from anywhere:
+
+    ${C_BOLD}URL:      http://${ip}:3000${C_RESET}
+    ${C_BOLD}Login:    admin${C_RESET}
+    ${C_BOLD}Password: ${pass}${C_RESET}
+
+  ${C_YELLOW}Share these credentials only with people who should see the dashboard.${C_RESET}
+  Grafana is the only auth layer — there is no TLS by default (HTTP).
+  Rotate password: edit GF_SECURITY_ADMIN_PASSWORD in ${PREFIX}/.env, then
+                   sudo docker compose -f ${PREFIX}/docker-compose.yml up -d
+
+  To switch to TLS via nginx + Let's Encrypt or a Cloudflare Tunnel, see
+  README.md "Public access" — pointing the proxy at 127.0.0.1:3000 with
+  --public DISABLED is the recommended long-term setup.
+
+EOF
+  else
+    cat <<EOF
   ${C_BOLD}Open Grafana via SSH tunnel from your laptop:${C_RESET}
 
     ssh -L 3000:127.0.0.1:3000 -L 9090:127.0.0.1:9090 ${SUDO_USER:-$USER}@${ip}
@@ -491,6 +548,12 @@ ${C_GREEN}${C_BOLD}════════════════════�
     Login:    admin
     Password: ${C_BOLD}${pass}${C_RESET}
 
+  Re-run with --public to bind on 0.0.0.0:3000 + open UFW :3000/tcp.
+
+EOF
+  fi
+
+  cat <<EOF
   (Password also stored in ${PREFIX}/.env, mode 600.)
 
   Dashboard "Monad Node — Overview" loads automatically.
@@ -498,7 +561,6 @@ ${C_GREEN}${C_BOLD}════════════════════�
 
 ${C_GREEN}═══════════════════════════════════════════════${C_RESET}
 
-For public access (Cloudflare Tunnel, nginx, etc.) — see README.md "Public access".
 For health checks: ${PREFIX}/scripts/healthcheck.sh
 To upgrade later:  sudo ${PREFIX}/install.sh --upgrade
 To uninstall:      sudo ${PREFIX}/install.sh --uninstall
