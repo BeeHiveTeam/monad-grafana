@@ -157,9 +157,29 @@ def _add_to_metrics_pipeline(text):
 
 
 def _write(path, content):
+    # Preserve the original file's mode + ownership so the service user
+    # (otelcol / otelcol-contrib / nobody) can still read it after the
+    # atomic replace. Previously we hardcoded mode 0640 which on a fresh
+    # `apt install otelcol` (where the package ships /etc/otelcol/config.yaml
+    # mode 0644, root:root) silently dropped world-read and made the file
+    # unreadable to the service user — otelcol then exited with "permission
+    # denied" on the next restart, leaving the operator with a dead VDP
+    # push and no host metrics.
+    try:
+        st = os.stat(path)
+        mode = st.st_mode & 0o777
+        uid, gid = st.st_uid, st.st_gid
+    except FileNotFoundError:
+        mode, uid, gid = 0o644, 0, 0
+
     tmp = f"{path}.tmp.{os.getpid()}"
     with open(tmp, 'w') as f: f.write(content)
-    os.chmod(tmp, 0o640)
+    os.chmod(tmp, mode)
+    try:
+        os.chown(tmp, uid, gid)
+    except PermissionError:
+        # Not running as root — leave whatever owner we ended up with.
+        pass
     os.replace(tmp, path)
 
 
