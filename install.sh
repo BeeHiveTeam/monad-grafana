@@ -320,6 +320,19 @@ check_hostmetrics() {
     return
   fi
 
+  # Pre-flight: if the active otelcol binary doesn't even SHIP the
+  # hostmetrics receiver (plain `otelcol` Core distribution, which is
+  # what docs.monad.xyz requires for VDP push), don't prompt at all —
+  # there's nothing the operator can answer yes to.
+  if command -v "$OTELCOL_SVC" >/dev/null 2>&1 \
+     && ! "$OTELCOL_SVC" components 2>/dev/null | grep -qE '^\s+- hostmetrics$|^\s+hostmetrics:|^hostmetrics$'; then
+    info "Active collector '$OTELCOL_SVC' is a Core build — hostmetrics receiver not compiled in."
+    info "Host-level panels (CPU/RAM/disk/network) will stay empty."
+    info "For host metrics on plain otelcol, run node_exporter as a sidecar"
+    info "(planned addition to monad-grafana — Prometheus naming: node_*)."
+    return
+  fi
+
   warn "hostmetrics NOT enabled in $OTELCOL_CONFIG."
   warn "Without it, these dashboard panels will be empty:"
   warn "  CPU usage / Load average / Memory / Swap / Disk IO / Filesystem / Network"
