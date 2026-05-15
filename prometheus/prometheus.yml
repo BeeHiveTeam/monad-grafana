@@ -27,3 +27,13 @@ scrape_configs:
       - targets: ['monad-rpc-exporter:9101']
         labels:
           source: rpc-exporter
+
+  # node_exporter — host-level metrics (CPU/RAM/disk/network/filesystems).
+  # The node-exporter container runs network_mode: host bound to 127.0.0.1:9100.
+  # Reach it from inside the monitoring bridge network via the host-gateway alias.
+  - job_name: node-exporter
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['host.docker.internal:9100']
+        labels:
+          source: node-exporter
