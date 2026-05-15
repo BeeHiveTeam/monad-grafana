@@ -85,7 +85,9 @@ def main():
 
     _write(CONFIG, text)
     print(f"Wrote updated {CONFIG}.")
-    print("Run 'sudo systemctl restart otelcol-contrib' to apply.")
+    # Hint matches the config path the operator actually pointed us at.
+    svc = 'otelcol-contrib' if 'otelcol-contrib' in CONFIG else 'otelcol'
+    print(f"Run 'sudo systemctl restart {svc}' to apply.")
 
 
 def _yaml_edit(text, yaml):
