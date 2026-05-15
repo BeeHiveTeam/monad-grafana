@@ -1,8 +1,8 @@
 # Monad Node — Grafana Stack
 
-Self-hosted Prometheus + Grafana for a [Monad](https://www.monad.xyz/) testnet/mainnet node, with a 47-panel dashboard covering sync status, vote delay, consensus events, system resources, disk, network, txpool, raptorcast traffic, and 20+ error categories.
+Self-hosted Prometheus + Grafana for a [Monad](https://www.monad.xyz/) testnet/mainnet node, with a 49-panel dashboard covering sync status, vote delay, consensus events, host resources, disk I/O, network, txpool, raptorcast traffic, and 20+ error categories.
 
-Built on top of the **OpenTelemetry collector that Monad already bundles** with the node — no extra agents on the host, just three Docker containers.
+Built on top of the **OpenTelemetry collector that Monad already bundles** (`monad_*` metrics on `:8889`) plus a Prometheus-standard `node_exporter` for host metrics — no agents on the host beyond Docker containers.
 
 ![Monad Node Overview Dashboard](docs/dashboard-screenshot.png)
 *(screenshot — replace with your own)*
@@ -11,82 +11,110 @@ Built on top of the **OpenTelemetry collector that Monad already bundles** with 
 
 ## What you get
 
-- **Prometheus** (port `9090`, loopback-only) — scrapes the OpenTelemetry collector exposing Prometheus metrics on `:8889` plus a sidecar RPC exporter. 30 days / 10 GB retention. **Works with either plain `otelcol`** (Monad apt default) **or `otelcol-contrib`** (richer receivers — required only if you want to ship logs to Loki via the journald receiver). The installer auto-detects which is active and operates on the matching config path; override with `OTELCOL_SVC=otelcol-contrib` if both are present.
-- **Grafana** (port `3000`, loopback-only) — Prometheus pre-provisioned as default datasource, dashboard auto-loaded on startup.
-- **monad-rpc-exporter** (port `9101`, loopback-only) — Python 3 sidecar (stdlib only, no pip deps) that polls JSON-RPC for block height + sync gap, reads `/proc` for service uptime. Runs as `nobody` (uid 65534) — not root.
-- **47-panel dashboard** with sections: Sync · Service uptime / peers · Vote delay · System resources · Disk · TxPool / Raptorcast · Errors / failures. **Datasource templated** — works with multiple Prometheus instances. **No hardcoded device/interface names** — adapts to whatever NVMe/NIC names your host uses.
+Four Docker containers, ~160 MB RAM total, ~0.2% CPU:
 
-Total resource footprint: ~95 MB RAM, ~0.1% CPU. Designed not to interfere with the Monad node itself. Container logs are rotated (json-file driver, 10 MB × 3 files per service) — won't fill the disk.
+| Container | Port (bind) | What |
+|---|---|---|
+| **Prometheus** | `127.0.0.1:9090` | Scrapes 4 targets (otelcol, rpc-exporter, node-exporter, self). 30-day / 10 GB retention. |
+| **Grafana** | `127.0.0.1:3000` (or `0.0.0.0:3000` with `--public`) | Prometheus pre-provisioned, dashboard auto-loaded. |
+| **monad-rpc-exporter** | `127.0.0.1:9101` | Python sidecar (stdlib only) — polls JSON-RPC for block height + sync gap, reads `/proc` for service uptime. Runs as `nobody` (uid 65534). |
+| **node-exporter** | host `:9100` (UFW-restricted to bridge subnet) | Prometheus standard host metrics: CPU, memory, swap, load average, disk I/O, filesystem, network — fills the panels that `monad_*` metrics don't cover. |
+
+**Dashboard**: 49 visible panels across 8 sections — Sync · Service uptime / peers · Vote delay · Host resources · Disk · Network · TxPool / Raptorcast · Errors. **Datasource templated** (works with multiple Prometheus instances) and **no hardcoded device/interface names** (adapts to whatever NVMe/NIC names your host uses).
+
+Container logs are rotated (json-file driver, 10 MB × 3 files per service) — won't fill the disk. Each container has explicit `mem_limit` + `cpus` constraints so they can't starve the validator.
 
 ---
 
 ## Requirements
 
 - Linux x86_64 host running a Monad node with `monad-bft.service`, `monad-execution.service`, `monad-rpc.service`
-- An OpenTelemetry collector exposing Prometheus metrics on `:8889`. **Monad apt installs plain `otelcol`** — that's the default and works out of the box for this stack. The installer auto-detects which OTel collector is active (`otelcol` or `otelcol-contrib`) and edits the correct config path when applying the hostmetrics overlay. If you want **journald → Loki** log pipelines (the contrib-only receiver), install `otelcol-contrib` separately (`apt install otelcol-contrib`).
+- An OpenTelemetry collector exposing Prometheus metrics on `:8889`. **Monad apt installs plain `otelcol`** (the Core OpenTelemetry distribution) — that's the default and works out of the box. The installer auto-detects which collector is active (`otelcol` or `otelcol-contrib`) and operates on the matching config path. Override with `OTELCOL_SVC=otelcol-contrib` if both are present.
 - Docker 20+ with `docker compose` plugin (auto-installed by `install.sh` if missing)
 - ~1 GB free disk for Prometheus data (30-day retention)
-- `sudo` for initial `ufw` rule and otelcol config edit
-- Optional: `cloudflared` if you want public HTTPS access without opening ports
+- `sudo` for initial `ufw` rules and (if you opt in) `otelcol` config edit
+- Optional: a domain/Cloudflare account if you want TLS-protected public access
 
-### Heads-up on the default Monad config
+### Heads-up on host metrics — `node_exporter` vs `hostmetrics` overlay
 
-The bundled OTel config (`/etc/otelcol/config.yaml` for plain `otelcol`, or `/etc/otelcol-contrib/config.yaml` if you switched) only forwards `monad_*` metrics from the node (vote delay, consensus events, peers, txpool). It does **not** include the **`hostmetrics`** receiver, so without an overlay these dashboard panels will be empty:
+`docs.monad.xyz` mandates the **plain `otelcol`** distribution for VDP push. Plain otelcol is Core-only — it **does not** ship the `hostmetrics` receiver (that's `otelcol-contrib` territory).
 
-> CPU usage / Load average / Memory / Swap / Disk IO / Filesystem usage / Network errors
+To fill the host panels (CPU/RAM/disk/network) without breaking VDP push, this stack ships **`node_exporter`** as a 4th container (Prometheus-standard, no otelcol config edit). It runs in `network_mode: host` + `pid: host` so it sees real NICs and the real `/proc`, not container namespaces.
 
-The auto-installer detects this gap and offers to apply a one-time overlay (with backup + restart). You can also run it later: `sudo /opt/monad-grafana/install.sh --enable-hostmetrics`. See [`docs/ENABLE_HOSTMETRICS.md`](docs/ENABLE_HOSTMETRICS.md) for the manual procedure if you'd rather review-then-apply by hand.
+If you actually run `otelcol-contrib`, the installer also offers a one-time `hostmetrics` overlay (with backup + auto-restore on restart failure). On plain `otelcol` it auto-detects the missing receiver and **skips the prompt** — no risk of breaking your collector. See [`docs/ENABLE_HOSTMETRICS.md`](docs/ENABLE_HOSTMETRICS.md) for the manual procedure.
 
 ### Heads-up on VDP OTel push (May 2026 onward)
 
-If you've enabled the MF VDP push (see [BeeHive monad-tools `docs/vdp-otel-push.md`](https://github.com/BeeHiveTeam/monad-tools/blob/main/docs/vdp-otel-push.md)), your OTel collector pushes `monad_*` metrics to `otel-external.monadinfra.com:443`. This stack continues to work alongside: VDP push is a **second exporter** in the same pipeline, the local Prometheus exporter on `:8889` stays available for our Grafana to scrape.
+If you've enabled the MF VDP push (see [BeeHive monad-tools `docs/vdp-otel-push.md`](https://github.com/BeeHiveTeam/monad-tools/blob/main/docs/vdp-otel-push.md)), your OTel collector pushes `monad_*` metrics to `otel-external.monadinfra.com:443`. This stack continues to work alongside: VDP push is a **second exporter** in the same pipeline, the local Prometheus exporter on `:8889` stays available for Grafana to scrape.
 
-If you run a custom `otelcol-contrib` with `journald → Loki` plus VDP push (our recommended split-pipelines pattern), this stack also works — it just scrapes `:8889` regardless of how many other exporters are attached. The hostmetrics overlay shipped here is compatible with both setups.
+If you run a custom `otelcol-contrib` with `journald → Loki` plus VDP push (the recommended split-pipelines pattern), this stack also works — it just scrapes `:8889` regardless of how many other exporters are attached.
 
 ### Heads-up on NTP
 
-`vote_delay_ready_after_timer_start` is sensitive to clock skew. `systemd-timesyncd` (Ubuntu/Debian default) drifts ~10–100ms, which makes the p99 panels look 30–80ms worse than reality and triggers false alerts. The installer offers to replace it with `chrony` (sub-ms accuracy, kernel discipline). Strongly recommended.
+`vote_delay_ready_after_timer_start` is sensitive to clock skew. `systemd-timesyncd` (Ubuntu/Debian default) drifts ~10–100 ms, which makes the p99 panels look 30–80 ms worse than reality and triggers false alerts. The installer offers to replace it with `chrony` (sub-ms accuracy, kernel discipline). Strongly recommended.
 
 ---
 
-## Quick start — one command (recommended)
+## Quick start
+
+### One command — loopback only (SSH-tunnel access)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/BeeHiveTeam/monad-grafana/main/install.sh | sudo bash
 ```
 
-The auto-installer does everything end-to-end:
+Grafana ends up on `127.0.0.1:3000`. Access from your laptop:
 
-1. Pre-flight: OS, free disk, **available RAM**, **Docker ≥20.10** (host-gateway), free ports `9090`/`3000`/`9101`
-2. **Verifies Monad is running** — `monad-bft.service`, `:8889` (otelcol). RPC `:8080` is checked but non-fatal (validator-only setups may not run it).
-3. **Installs Docker** if missing (via official `get.docker.com`, with confirmation)
-4. **Detects existing `/opt/monitoring/`** stack and offers to stop it (container-name conflicts)
-5. Clones repo to `/opt/monad-grafana`
-6. **`configure_prometheus`**: sets `external_labels: host: $(hostname -s)` automatically — no manual edit needed
-7. Optional **`check_chrony`**: warns if you're on `systemd-timesyncd` (drifts 10-100 ms, inflates p99 vote_delay) and offers to install chrony
-8. Optional **`check_hostmetrics`**: detects whether otelcol exposes `system_*` metrics on `:8889` and offers to apply the overlay (backups + restart)
-9. Generates Grafana password, writes `.env` (mode `0600`)
-10. `docker compose up -d`
-11. Auto-detects Docker bridge subnet, adds **UFW allow rules** for `:8889` + `:8080`
-12. Reloads Prometheus, waits, verifies all targets `UP`
-13. Prints SSH-tunnel command + URL + admin password
+```
+ssh -L 3000:127.0.0.1:3000 -L 9090:127.0.0.1:9090 user@your.server
+# then open http://localhost:3000
+```
 
-When done you'll see:
+### One command — public access (browser direct, with admin password)
+
+```bash
+sudo bash -c 'curl -fsSL https://raw.githubusercontent.com/BeeHiveTeam/monad-grafana/main/install.sh -o /tmp/mg.sh && bash /tmp/mg.sh --public'
+```
+
+This binds Grafana on `0.0.0.0:3000` and opens UFW `:3000/tcp`. The installer prints the URL + auto-generated admin password at the end:
 
 ```
 ═══════════════════════════════════════════════
   Monad Grafana stack — installed and running
 ═══════════════════════════════════════════════
 
-  Open Grafana via SSH tunnel from your laptop:
+  Public access ENABLED — Grafana reachable from anywhere:
 
-    ssh -L 3000:127.0.0.1:3000 -L 9090:127.0.0.1:9090 user@your.server
-
-  Then in browser:  http://localhost:3000
-
+    URL:      http://<server-ip>:3000
     Login:    admin
     Password: <generated 32-char>
+
+  Grafana is the only auth layer — there is no TLS by default (HTTP).
+  Share these credentials only with people who should see the dashboard.
+  Rotate password: edit GF_SECURITY_ADMIN_PASSWORD in /opt/monad-grafana/.env
+                   then docker compose up -d
 ```
+
+`--public` is suitable for **review / show-and-tell** (Foundation, delegators, auditors). For long-term public exposure, put nginx + Let's Encrypt or a Cloudflare Tunnel in front and run the installer without `--public` — see [Public access](#public-access-tls--auth) below.
+
+### What the installer does end-to-end
+
+1. **Pre-flight**: OS, free disk, available RAM, Docker ≥20.10, free ports `9090`/`3000`/`9101`
+2. **Verifies Monad is running** — `monad-bft.service` + `:8889` (otelcol). RPC `:8080` is checked but non-fatal (validator-only setups may not expose it).
+3. **Installs Docker** if missing (via official `get.docker.com`, with confirmation)
+4. **Detects existing `/opt/monitoring/`** stack and offers to stop it (container-name conflicts)
+5. **Clones repo** to `/opt/monad-grafana`
+6. **`configure_prometheus`**: sets `external_labels: host: $(hostname -s)` automatically
+7. **`check_chrony`**: warns if you're on `systemd-timesyncd` and offers to install chrony
+8. **`check_hostmetrics`**:
+   - On `otelcol-contrib`: detects whether `hostmetrics` is enabled and offers to apply the overlay (with backup + auto-restore on restart failure)
+   - On plain `otelcol`: skips the prompt with an INFO that host panels will be filled by `node_exporter` (already part of the stack) — no risk to your collector
+9. **`generate_env`**: generates Grafana admin password, writes `.env` (mode `0600` root-only)
+10. **`apply_grafana_bind`**: sets `GRAFANA_BIND=127.0.0.1` (default) or `0.0.0.0` (if `--public`)
+11. **`docker compose up -d`** — brings up all four containers
+12. **`setup_ufw`** — auto-detects the Docker bridge subnet and adds allow rules: `:8889` (otelcol), `:8080` (Monad RPC), `:9100` (node-exporter). With `--public`, also opens `:3000/tcp` for anywhere.
+13. **`verify`** — reloads Prometheus, waits 20s for first scrape, confirms all 4 targets UP
+14. **`print_access`** — prints the right access pattern (SSH-tunnel command + URL + admin password, or direct URL with `--public`)
 
 ### Manual install (review the script first)
 
@@ -94,21 +122,28 @@ When done you'll see:
 git clone https://github.com/BeeHiveTeam/monad-grafana.git
 cd monad-grafana
 less install.sh           # read what it does
-sudo ./install.sh
+sudo ./install.sh           # interactive
+sudo ./install.sh --public  # bind Grafana on 0.0.0.0:3000 + open UFW :3000
 ```
 
 ### Installer flags
 
 ```
 sudo ./install.sh --help
+sudo ./install.sh --public                          # bind Grafana on 0.0.0.0:3000 + open UFW :3000
 sudo ./install.sh --non-interactive                 # CI mode, no prompts
 sudo ./install.sh --prefix=/srv/monitoring          # custom path
 sudo ./install.sh --local-rpc=http://1.2.3.4:8080   # remote Monad RPC
-sudo ./install.sh --public-rpc=https://...          # alternate public RPC
+sudo ./install.sh --public-rpc=https://...          # alternate public RPC for sync-gap calc
 sudo ./install.sh --upgrade                         # git pull + docker pull + recreate
 sudo ./install.sh --enable-hostmetrics              # apply hostmetrics overlay separately
+                                                    # (refuses cleanly on plain otelcol)
 sudo ./install.sh --uninstall                       # stop, remove, optionally clean UFW
 ```
+
+Environment variables override flags: `PREFIX`, `LOCAL_RPC_URL`, `PUBLIC_RPC_URL`, `PUBLIC_ACCESS`, `NON_INTERACTIVE`, `OTELCOL_SVC`.
+
+---
 
 ## Health check
 
@@ -119,9 +154,11 @@ After install, run anytime:
 # ✓ container.prometheus: running
 # ✓ container.grafana: running
 # ✓ container.monad-rpc-exporter: running
+# ✓ container.node-exporter: running
 # ✓ prometheus.ready
 # ✓ target.monad-otelcol
 # ✓ target.monad-rpc-exporter
+# ✓ target.node-exporter
 # ✓ target.prometheus
 # ✓ sync.gap: 0 blocks
 # ✓ block.age: 4s
@@ -130,7 +167,7 @@ After install, run anytime:
 ./scripts/healthcheck.sh --quiet --json   # CI / cron / piped
 ```
 
-Returns exit `0` if everything is healthy, `1` otherwise. Add to cron for periodic check:
+Returns exit `0` if everything is healthy, `1` otherwise. Cron example:
 
 ```cron
 */5 * * * * /opt/monad-grafana/scripts/healthcheck.sh --quiet 2>&1 | logger -t monad-mon
@@ -143,28 +180,28 @@ Returns exit `0` if everything is healthy, `1` otherwise. Add to cron for period
 ```
 monad-grafana/
 ├── install.sh                             # auto-installer (preflight, deps, ufw, verify)
-├── docker-compose.yml                     # 3 services with logging rotation
+├── docker-compose.yml                     # 4 services: prometheus, grafana, rpc-exporter, node-exporter
 ├── .env.example                           # template for Grafana admin password
 ├── prometheus/
-│   └── prometheus.yml                     # scrape config (otelcol :8889 + rpc-exporter :9101)
+│   └── prometheus.yml                     # scrape config (otelcol :8889 + rpc-exporter :9101 + node-exporter :9100)
 ├── grafana/
 │   ├── provisioning/
 │   │   ├── datasources/prometheus.yaml    # auto-load Prometheus as default datasource
 │   │   └── dashboards/monad.yaml          # auto-load dashboard on startup
 │   └── dashboards/
-│       └── monad-overview.json            # 47-panel dashboard, datasource-templated
+│       └── monad-overview.json            # 49-panel dashboard, datasource-templated
 ├── exporter/
 │   └── exporter.py                        # Python sidecar (stdlib only, runs as nobody)
 ├── scripts/
 │   ├── healthcheck.sh                     # post-install verification (cron-friendly)
-│   └── apply_hostmetrics_overlay.py       # adds hostmetrics receiver to /etc/otelcol-contrib
+│   └── apply_hostmetrics_overlay.py       # adds hostmetrics receiver to otelcol-contrib config
 └── docs/
     └── ENABLE_HOSTMETRICS.md              # manual procedure (review-then-apply)
 ```
 
 ---
 
-## What's inside the dashboard (47 panels)
+## What's inside the dashboard (49 panels)
 
 **Sync status** — Local block height · Public block height · Sync gap · Last block age · RPC up indicators · Block commit rate · Local timeouts/min
 
@@ -172,9 +209,11 @@ monad-grafana/
 
 **Vote delay** — p50/p90/p99 stats with thresholds · over-time chart · consensus events rate
 
-**System resources** — CPU usage gauge · Load average bargauge (vs cores) · Memory donut · Swap usage gauge · CPU/memory/swap timeseries
+**Host resources** (via `node_exporter`) — CPU usage gauge · Load average bargauge (vs cores) · Memory breakdown (used/available/cached) · Swap usage · CPU per-mode timeseries · Memory + swap over time
 
-**Disk · Filesystem** — IO bytes/sec per device · operations/sec · pending queue · filesystem usage % · free space
+**Disk · Filesystem** (via `node_exporter`) — IO bytes/sec per device · operations/sec · pending queue depth · filesystem usage % · free space
+
+**Network** (via `node_exporter`) — Throughput per NIC · Errors · Dropped packets
 
 **TxPool · Raptorcast** — tracked txs · tracked addresses · insert/sec · drop reasons · UDP rx/tx bytes · broadcast latency p99
 
@@ -206,6 +245,17 @@ global:
 
 Then `docker compose restart prometheus`.
 
+### Grafana bind interface (loopback vs public)
+
+Controlled by `GRAFANA_BIND` in `.env`:
+
+| Value | Effect |
+|---|---|
+| `127.0.0.1` (default) | Grafana on loopback only — access via SSH tunnel |
+| `0.0.0.0` (set by `--public`) | Grafana reachable from anywhere — admin/password auth is the only protection (no TLS) |
+
+The installer rewrites this line every run based on the `--public` flag, so subsequent `--upgrade`s keep the chosen mode.
+
 ### Dashboard customization
 
 The provisioned dashboard is read-only by default but `allowUiUpdates: true` (see `grafana/provisioning/dashboards/monad.yaml`) lets you edit and save in the UI. Saved JSON lives in the Grafana volume; to make it permanent in git, export and replace `grafana/dashboards/monad-overview.json`:
@@ -218,9 +268,9 @@ git diff grafana/dashboards/
 
 ---
 
-## Public access (optional)
+## Public access (TLS + auth)
 
-The default setup exposes nothing to the internet. Pick one of these if you need browser access without SSH tunnel:
+The `--public` installer flag binds Grafana on `0.0.0.0:3000` over plain HTTP. That's fine for short-lived review/demo windows but **not** for long-term public exposure. For that, run the installer **without** `--public` and put a TLS-terminating reverse proxy in front.
 
 ### Cloudflare Quick Tunnel — temporary, for one-off viewing
 
@@ -236,11 +286,9 @@ Random `https://*.trycloudflare.com` URL, max 24h lifetime, killed by `kill $(pg
 
 ### Cloudflare Tunnel + Access — permanent, with email gate
 
-Best long-term option:
-
 1. Create a tunnel in Cloudflare Zero Trust dashboard, install `cloudflared` as a service with the connector token.
 2. Add hostname `grafana.your-domain.com` → `http://localhost:3000`.
-3. Add Access policy: allow only your email.
+3. Add Access policy: allow only your email / SSO group.
 
 Zero open ports, TLS by Cloudflare, double auth (Access + Grafana login).
 
@@ -252,6 +300,17 @@ Open 80/443 in UFW, point a DNS A-record at your server, `certbot --nginx`, prox
 
 ## Troubleshooting
 
+**`node-exporter` target shows DOWN with `context deadline exceeded`.**
+Either the container didn't recreate after `--upgrade` (still listening on the wrong interface), or UFW is blocking the bridge → host gateway on `:9100`. Check:
+
+```bash
+sudo docker inspect node-exporter --format '{{json .Args}}'   # should include --web.listen-address=0.0.0.0:9100
+sudo ss -tlnp | grep :9100                                    # should be 0.0.0.0:9100, not 127.0.0.1:9100
+sudo ufw status | grep 9100                                    # should ALLOW from <bridge-subnet>
+```
+
+If the listen address is wrong: `cd /opt/monad-grafana && sudo docker compose up -d --force-recreate node-exporter`. If UFW rule is missing: re-run `sudo /opt/monad-grafana/install.sh --upgrade`.
+
 **`monad-otelcol` target shows DOWN with `context deadline exceeded`.**
 The Docker bridge subnet isn't allowed through UFW to reach `:8889` on the host. Confirm subnet:
 
@@ -261,8 +320,6 @@ docker network inspect monad-grafana_monitoring --format '{{range .IPAM.Config}}
 sudo ufw allow from 172.18.0.0/16 to any port 8889 proto tcp
 ```
 
-If the subnet differs from the one in Quick Start, use the actual one from the command above.
-
 **`monad-rpc-exporter` shows `monad_local_block_number 0`.**
 The exporter can't reach Monad RPC. Check:
 
@@ -271,24 +328,26 @@ docker logs monad-rpc-exporter
 docker exec monad-rpc-exporter wget -qO- --timeout=3 http://host.docker.internal:8080
 ```
 
-If `wget` fails: missing UFW rule for `8080` (see Quick Start step 3) or RPC binds only to `127.0.0.1`. In the latter case set `LOCAL_RPC_URL=http://172.18.0.1:8080` (host-gateway IP) in `.env`.
+If `wget` fails: missing UFW rule for `:8080` (the installer adds one for the bridge subnet — verify with `ufw status | grep 8080`), or RPC binds only to `127.0.0.1`. In the latter case set `LOCAL_RPC_URL=http://<bridge-gateway-ip>:8080` in `.env`.
 
 **`monad_service_uptime_seconds` is missing.**
-Container needs `pid: host` (already in `docker-compose.yml`) AND your `docker` build must support PID namespace sharing. Verify with:
+The exporter container needs `pid: host` (already in `docker-compose.yml`) AND your Docker build must support PID namespace sharing. Verify:
 
 ```bash
-docker exec monad-rpc-exporter ls /proc/1/comm
 docker exec monad-rpc-exporter cat /proc/1/comm
 # should print 'systemd' (host PID 1), not 'python3' (container PID 1)
 ```
 
+**`hostmetrics` overlay failed and otelcol won't start.**
+The installer's `apply_hostmetrics()` auto-restores the most recent `.bak.<ts>` file when otelcol fails to restart (since commit `1dcbdea`). If you're running an older version of this stack and got stuck: `sudo cp /etc/otelcol/config.yaml.bak.* /etc/otelcol/config.yaml && sudo systemctl reset-failed otelcol && sudo systemctl start otelcol`.
+
 **Dashboard panels are empty.**
-- Wait 30 sec after first start (Prometheus needs 1-2 scrape cycles).
-- Open Prometheus directly via tunnel: <http://localhost:9090/targets> — confirm all 3 jobs are UP.
-- Try a query in <http://localhost:9090/graph>: `monad_local_block_number` — if returns data, Grafana datasource is misconfigured.
+- Wait 30 sec after first start (Prometheus needs 1–2 scrape cycles).
+- Open Prometheus directly: <http://localhost:9090/targets> — confirm all 4 jobs are UP.
+- Try a query in <http://localhost:9090/graph>: `node_load1` for host metrics, `monad_bft_raptorcast_secondary_client_num_current_groups` for monad. If both return data, the dashboard's Prometheus datasource may be misconfigured.
 
 **Disk fills up faster than expected.**
-30-day retention with default scrape interval = ~1-2 GB. If higher, check `--storage.tsdb.retention.size=10GB` cap in `docker-compose.yml`.
+30-day retention with default scrape interval = ~1–2 GB. If higher, check `--storage.tsdb.retention.size=10GB` cap in `docker-compose.yml`.
 
 ---
 
@@ -314,19 +373,21 @@ curl -X POST http://127.0.0.1:9090/-/reload
 
 ## Security notes
 
-- All ports bind to `127.0.0.1` only — nothing exposed to the internet by default.
-- Grafana password lives in `.env` (mode `0600`, root-only).
-- The UFW rules added by the installer scope access to the Docker bridge subnet only — outside hosts cannot reach `:8889` or `:8080`.
-- The **RPC exporter runs as `nobody` (uid 65534)** with read-only filesystem mount and `pid: host` for `/proc` access. Reading `/proc/<pid>/comm` and `/proc/<pid>/stat` is world-readable so root isn't needed — drops the risk of accidentally reading the validator's `/proc/<bft-pid>/environ` if BLS keys leak there.
-- Container logs are bounded by `json-file` driver with `max-size: 10m`, `max-file: 3` per service — won't fill the disk.
-- All three services have explicit `mem_limit` + `cpus` constraints (Prometheus 512m/1.0, Grafana 512m/0.5, exporter 64m/0.1) so they can't starve the validator.
-- If exposing Grafana publicly, use Cloudflare Access or nginx + auth on top of Grafana login (defence in depth).
+- **Default (no `--public`)**: all ports bind to `127.0.0.1` only — nothing exposed to the internet. Access requires SSH tunnel.
+- **`--public` mode**: Grafana `:3000` is bound on `0.0.0.0` and `:3000/tcp` is opened in UFW for anywhere. Grafana's `admin` login + 32-char generated password is the **only** auth layer. Plain HTTP — no TLS. Suitable for short review windows; for permanent public access put a TLS-terminating reverse proxy in front (see [Public access](#public-access-tls--auth)).
+- **Grafana password** lives in `.env` (mode `0600`, root-only). Rotate with `sed -i s/.../.../ /opt/monad-grafana/.env && docker compose up -d`.
+- **UFW rules** added by the installer scope access to the Docker bridge subnet only: `:8889` (otelcol), `:8080` (Monad RPC), `:9100` (node-exporter). Outside hosts cannot reach them.
+- **RPC exporter** runs as `nobody` (uid 65534) with read-only filesystem mount and `pid: host` for `/proc` access. Reading `/proc/<pid>/comm` and `/proc/<pid>/stat` is world-readable so root isn't needed — drops the risk of accidentally reading the validator's `/proc/<bft-pid>/environ` if BLS keys leak there.
+- **node-exporter** runs in `network_mode: host` + `pid: host` so it sees real NICs and `/proc`. Listens on `0.0.0.0:9100` (mandatory — `127.0.0.1` only would be unreachable from Prometheus via bridge-gateway), but UFW restricts `:9100` to the bridge subnet only, keeping it unreachable from the public internet.
+- **Container logs** are bounded by `json-file` driver with `max-size: 10m`, `max-file: 3` per service — won't fill the disk.
+- All four services have explicit `mem_limit` + `cpus` constraints (Prometheus 512m/1.0, Grafana 512m/0.5, exporter 64m/0.1, node-exporter 64m/0.1) so they can't starve the validator.
 
 ---
 
 ## Credits
 
 - Built around the OpenTelemetry collector bundled with Monad's official node distribution.
+- Host metrics via [`prometheus/node_exporter`](https://github.com/prometheus/node_exporter).
 - Dashboard structure inspired by community Grafana dashboards for Cosmos / Solana validators.
 
 ## License
