@@ -339,7 +339,12 @@ check_hostmetrics() {
   warn "Reference: $PREFIX/docs/ENABLE_HOSTMETRICS.md (after install)"
 
   if confirm_default_yes "Apply hostmetrics overlay now? (backs up otelcol config, restarts $OTELCOL_SVC)"; then
-    apply_hostmetrics
+    # apply_hostmetrics may return 1 if the active otelcol binary lacks the
+    # hostmetrics receiver (plain Core distribution). This is an EXPECTED
+    # optional-step refusal, not a fatal installer error — keep going.
+    # Without `|| true`, `set -e` at the top of this script would abort the
+    # whole install at this point.
+    apply_hostmetrics || warn "Hostmetrics overlay not applied — continuing install."
   fi
 }
 
