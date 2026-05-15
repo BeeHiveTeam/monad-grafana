@@ -341,6 +341,28 @@ apply_hostmetrics() {
     return 1
   fi
 
+  # Pre-flight: confirm the active otelcol BINARY actually has the
+  # hostmetrics receiver compiled in. Plain `otelcol` (the Core
+  # distribution that docs.monad.xyz mandates for VDP push) does NOT
+  # ship hostmetrics — it's contrib-only. Writing the overlay against
+  # plain otelcol would produce a config that fails to load and crashes
+  # the collector on next restart.
+  if command -v "$OTELCOL_SVC" >/dev/null 2>&1; then
+    if ! "$OTELCOL_SVC" components 2>/dev/null | grep -qE '^\s+- hostmetrics$|^\s+hostmetrics:|^hostmetrics$'; then
+      err "Active collector '$OTELCOL_SVC' does NOT include the hostmetrics receiver."
+      err "  hostmetrics is part of otelcol-contrib only — plain otelcol (Core,"
+      err "  which docs.monad.xyz requires for VDP push) does not ship it."
+      err "  Skipping overlay to avoid breaking the running collector."
+      err ""
+      err "  Recommended path: install node_exporter as a sidecar — host metrics"
+      err "  arrive on :9100 (Prometheus naming, scraped by our prometheus.yml)."
+      err "  See docs/ENABLE_HOSTMETRICS.md (alternative paths section)."
+      return 1
+    fi
+  else
+    warn "Cannot find $OTELCOL_SVC binary on PATH — proceeding but verify after restart."
+  fi
+
   # Need PyYAML for safe edit; fall back gracefully if unavailable
   if ! python3 -c 'import yaml' 2>/dev/null; then
     info "Installing python3-yaml for safe config edit…"
@@ -356,9 +378,25 @@ apply_hostmetrics() {
   if systemctl is-active --quiet "$OTELCOL_SVC"; then
     ok "$OTELCOL_SVC restarted."
   else
-    err "$OTELCOL_SVC failed to restart!"
-    err "  journalctl -u $OTELCOL_SVC --since '2 min ago'"
-    err "  Restore from backup: ls ${OTELCOL_CONFIG}.bak.*"
+    err "$OTELCOL_SVC failed to restart after applying hostmetrics overlay!"
+    err "  Restoring config from most-recent backup to bring the collector back up…"
+    # Find newest backup created by the overlay script.
+    local latest_bak
+    latest_bak=$(ls -t "${OTELCOL_CONFIG}".bak.* 2>/dev/null | head -1)
+    if [[ -n "$latest_bak" ]]; then
+      cp -a "$latest_bak" "$OTELCOL_CONFIG"
+      systemctl restart "$OTELCOL_SVC"
+      sleep 3
+      if systemctl is-active --quiet "$OTELCOL_SVC"; then
+        ok "Restored $OTELCOL_CONFIG from $latest_bak — $OTELCOL_SVC is up again."
+      else
+        err "Restore failed too. Manual recovery required:"
+        err "  sudo cp $latest_bak $OTELCOL_CONFIG && sudo systemctl restart $OTELCOL_SVC"
+      fi
+    else
+      err "No backup found at ${OTELCOL_CONFIG}.bak.* — manual recovery needed."
+    fi
+    err "Diagnostic: journalctl -u $OTELCOL_SVC --since '2 min ago'"
     return 1
   fi
 
