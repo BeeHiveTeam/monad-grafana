@@ -518,9 +518,10 @@ setup_ufw() {
     return
   fi
 
-  info "Adding UFW allow rules: $subnet → :8889, :8080…"
+  info "Adding UFW allow rules: $subnet → :8889, :8080, :9100…"
   ufw allow from "$subnet" to any port 8889 proto tcp comment 'monad-grafana → otelcol' >> "$LOG_FILE" 2>&1 || true
   ufw allow from "$subnet" to any port 8080 proto tcp comment 'monad-grafana → monad-rpc' >> "$LOG_FILE" 2>&1 || true
+  ufw allow from "$subnet" to any port 9100 proto tcp comment 'monad-grafana → node-exporter' >> "$LOG_FILE" 2>&1 || true
   ok "UFW rules added for subnet $subnet."
 
   if (( PUBLIC_ACCESS == 1 )); then
