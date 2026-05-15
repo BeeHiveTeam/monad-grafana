@@ -83,7 +83,13 @@ services:
       - --collector.netdev
       # Disk I/O — critical for TrieDB performance visibility.
       - --collector.diskstats
-      - --web.listen-address=127.0.0.1:9100
+      # Listen on 0.0.0.0:9100. With network_mode: host, this is the host's
+      # network namespace — binding to 127.0.0.1 here would mean Prometheus
+      # (which scrapes via docker-bridge → host-gateway IP, not loopback)
+      # cannot reach us. setup_ufw() in install.sh adds an allow rule
+      # restricted to the monitoring bridge subnet, so :9100 stays unreachable
+      # from the public internet while remaining scrape-able from Prometheus.
+      - --web.listen-address=0.0.0.0:9100
     volumes:
       - /:/host:ro,rslave
     mem_limit: 64m
