@@ -362,7 +362,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 5
+        "y": 7
       },
       "id": 10,
       "title": "Service uptime \u00b7 Peers",
@@ -378,7 +378,7 @@
         "h": 3,
         "w": 4,
         "x": 0,
-        "y": 6
+        "y": 8
       },
       "id": 11,
       "targets": [
@@ -407,7 +407,7 @@
         "h": 3,
         "w": 4,
         "x": 4,
-        "y": 6
+        "y": 8
       },
       "id": 12,
       "targets": [
@@ -436,7 +436,7 @@
         "h": 3,
         "w": 4,
         "x": 8,
-        "y": 6
+        "y": 8
       },
       "id": 13,
       "targets": [
@@ -482,7 +482,7 @@
         "h": 3,
         "w": 3,
         "x": 12,
-        "y": 6
+        "y": 8
       },
       "id": 14,
       "targets": [
@@ -511,7 +511,7 @@
         "h": 3,
         "w": 3,
         "x": 15,
-        "y": 6
+        "y": 8
       },
       "id": 15,
       "targets": [
@@ -540,7 +540,7 @@
         "h": 3,
         "w": 3,
         "x": 18,
-        "y": 6
+        "y": 8
       },
       "id": 16,
       "targets": [
@@ -569,7 +569,7 @@
         "h": 3,
         "w": 3,
         "x": 21,
-        "y": 6
+        "y": 8
       },
       "id": 17,
       "targets": [
@@ -593,7 +593,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 9
+        "y": 11
       },
       "id": 20,
       "title": "Vote delay",
@@ -626,7 +626,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 10
+        "y": 12
       },
       "id": 21,
       "targets": [
@@ -672,7 +672,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 10
+        "y": 12
       },
       "id": 22,
       "targets": [
@@ -718,7 +718,7 @@
         "h": 4,
         "w": 4,
         "x": 8,
-        "y": 10
+        "y": 12
       },
       "id": 23,
       "targets": [
@@ -747,7 +747,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 10
+        "y": 12
       },
       "id": 24,
       "targets": [
@@ -793,7 +793,7 @@
         "h": 4,
         "w": 12,
         "x": 0,
-        "y": 14
+        "y": 16
       },
       "id": 25,
       "targets": [
@@ -834,7 +834,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 18
+        "y": 20
       },
       "id": 30,
       "title": "System resources",
@@ -874,7 +874,7 @@
         "h": 7,
         "w": 6,
         "x": 0,
-        "y": 19
+        "y": 21
       },
       "id": 31,
       "options": {
@@ -918,7 +918,7 @@
         "h": 7,
         "w": 6,
         "x": 6,
-        "y": 19
+        "y": 21
       },
       "id": 32,
       "options": {
@@ -969,7 +969,7 @@
         "h": 7,
         "w": 6,
         "x": 12,
-        "y": 19
+        "y": 21
       },
       "id": 33,
       "options": {
@@ -1046,7 +1046,7 @@
         "h": 7,
         "w": 6,
         "x": 18,
-        "y": 19
+        "y": 21
       },
       "id": 34,
       "options": {
@@ -1083,7 +1083,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 26
+        "y": 28
       },
       "id": 35,
       "targets": [
@@ -1113,7 +1113,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 26
+        "y": 28
       },
       "id": 36,
       "targets": [
@@ -1154,7 +1154,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 33
+        "y": 35
       },
       "id": 40,
       "title": "Disk \u00b7 Filesystem",
@@ -1170,7 +1170,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 34
+        "y": 36
       },
       "id": 41,
       "targets": [
@@ -1200,7 +1200,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 34
+        "y": 36
       },
       "id": 42,
       "targets": [
@@ -1230,7 +1230,7 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 41
+        "y": 43
       },
       "id": 43,
       "targets": [
@@ -1279,7 +1279,7 @@
         "h": 3,
         "w": 6,
         "x": 12,
-        "y": 41
+        "y": 43
       },
       "id": 44,
       "options": {
@@ -1314,7 +1314,7 @@
         "h": 3,
         "w": 6,
         "x": 18,
-        "y": 41
+        "y": 43
       },
       "id": 45,
       "targets": [
@@ -1338,7 +1338,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 47
+        "y": 49
       },
       "id": 50,
       "title": "TxPool \u00b7 Raptorcast",
@@ -1354,7 +1354,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 48
+        "y": 50
       },
       "id": 51,
       "targets": [
@@ -1383,7 +1383,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 48
+        "y": 50
       },
       "id": 52,
       "targets": [
@@ -1413,7 +1413,7 @@
         "h": 4,
         "w": 4,
         "x": 8,
-        "y": 48
+        "y": 50
       },
       "id": 53,
       "targets": [
@@ -1443,7 +1443,7 @@
         "h": 4,
         "w": 4,
         "x": 12,
-        "y": 48
+        "y": 50
       },
       "id": 54,
       "targets": [
@@ -1473,7 +1473,7 @@
         "h": 4,
         "w": 4,
         "x": 16,
-        "y": 48
+        "y": 50
       },
       "id": 55,
       "targets": [
@@ -1503,7 +1503,7 @@
         "h": 4,
         "w": 4,
         "x": 20,
-        "y": 48
+        "y": 50
       },
       "id": 56,
       "targets": [
@@ -1532,7 +1532,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 52
+        "y": 54
       },
       "id": 57,
       "targets": [
@@ -1618,7 +1618,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 52
+        "y": 54
       },
       "id": 58,
       "targets": [
@@ -1659,7 +1659,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 59
+        "y": 61
       },
       "id": 60,
       "title": "Errors / failures",
@@ -1675,7 +1675,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 60
+        "y": 62
       },
       "id": 61,
       "targets": [
@@ -1809,7 +1809,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 60
+        "y": 62
       },
       "id": 62,
       "targets": [
@@ -1879,7 +1879,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 68
+        "y": 70
       },
       "id": 63,
       "targets": [
@@ -1941,7 +1941,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 68
+        "y": 70
       },
       "id": 64,
       "targets": [
@@ -2003,7 +2003,7 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 75
+        "y": 77
       },
       "id": 65,
       "targets": [
@@ -2041,7 +2041,7 @@
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 75
+        "y": 77
       },
       "id": 66,
       "targets": [
@@ -2071,7 +2071,7 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 81
+        "y": 83
       },
       "id": 67,
       "targets": [
@@ -2117,7 +2117,7 @@
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 81
+        "y": 83
       },
       "id": 68,
       "targets": [
@@ -2186,7 +2186,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 87
+        "y": 89
       },
       "panels": []
     },
@@ -2199,7 +2199,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 88
+        "y": 90
       },
       "datasource": {
         "type": "prometheus",
@@ -2261,7 +2261,7 @@
         "h": 4,
         "w": 18,
         "x": 6,
-        "y": 88
+        "y": 90
       },
       "datasource": {
         "type": "prometheus",
@@ -2293,6 +2293,90 @@
         "graphMode": "none",
         "textMode": "name"
       }
+    },
+    {
+      "id": 72,
+      "type": "stat",
+      "title": "Network",
+      "description": "Monad network (auto-detected from chain_id at install time). Maps Prometheus external_label 'network' to a colored badge: testnet=green, mainnet=orange.",
+      "gridPos": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "testnet": {
+                  "color": "green",
+                  "index": 0,
+                  "text": "TESTNET"
+                }
+              },
+              "type": "value"
+            },
+            {
+              "options": {
+                "mainnet": {
+                  "color": "orange",
+                  "index": 1,
+                  "text": "MAINNET"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "unknown"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^network$/",
+          "values": false
+        },
+        "textMode": "value_and_name"
+      },
+      "pluginVersion": "11.3.0",
+      "targets": [
+        {
+          "expr": "max by (network) (up{job=\"prometheus\"})",
+          "refId": "A",
+          "instant": true,
+          "legendFormat": "{{network}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "format": "table"
+        }
+      ]
     }
   ],
   "refresh": "15s",

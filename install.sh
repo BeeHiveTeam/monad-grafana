@@ -431,6 +431,24 @@ apply_hostmetrics() {
 
 # ===== Install steps =====
 
+detect_monad_network() {
+  # Probe local Monad RPC for chain_id. Known Monad chain IDs:
+  #   testnet = 10143 (0x279f)
+  #   mainnet = 143   (0x8f)
+  # On any failure (no RPC, wrong chain, parse error) fall back to "testnet"
+  # — the safer default for a fresh install that hasn't been pointed at mainnet.
+  local chain_id
+  chain_id=$(curl -sf -m 3 -X POST -H 'Content-Type: application/json' \
+    -d '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' \
+    "$LOCAL_RPC_URL" 2>/dev/null \
+    | python3 -c 'import json,sys;r=json.load(sys.stdin);print(int(r["result"],16))' 2>/dev/null)
+  case "$chain_id" in
+    10143) echo "testnet" ;;
+    143)   echo "mainnet" ;;
+    *)     echo "" ;;
+  esac
+}
+
 configure_prometheus() {
   local prom="$PREFIX/prometheus/prometheus.yml"
   local h
@@ -439,6 +457,27 @@ configure_prometheus() {
   if grep -q 'host: monad-node' "$prom"; then
     sed -i "s/host: monad-node/host: ${h//\//\\/}/" "$prom"
     ok "Prometheus external_labels: host=$h"
+  fi
+
+  # Auto-detect testnet vs mainnet via eth_chainId on the local Monad RPC,
+  # and write the right network label. Operator override via env:
+  #   NETWORK=mainnet sudo ./install.sh
+  local net="${NETWORK:-}"
+  if [[ -z "$net" ]]; then
+    net=$(detect_monad_network)
+  fi
+  if [[ -n "$net" ]]; then
+    sed -i -E "s/^([[:space:]]+network:[[:space:]]+).*/\1${net}/" "$prom"
+    ok "Prometheus external_labels: network=$net (chain_id-detected)"
+    # Switch PUBLIC_RPC_URL to the matching public endpoint if the operator
+    # didn't pass --public-rpc= explicitly (we left default testnet-rpc.monad.xyz).
+    if [[ "$net" == "mainnet" && "$PUBLIC_RPC_URL" == "https://testnet-rpc.monad.xyz" ]]; then
+      PUBLIC_RPC_URL="https://rpc.monad.xyz"
+      ok "PUBLIC_RPC_URL auto-switched to $PUBLIC_RPC_URL for mainnet"
+    fi
+  else
+    warn "Could not detect Monad network (eth_chainId failed). Leaving network=testnet."
+    warn "  Override with: NETWORK=mainnet sudo ./install.sh  (or edit prometheus.yml)"
   fi
 }
 
