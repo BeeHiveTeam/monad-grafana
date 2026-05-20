@@ -437,10 +437,16 @@ detect_monad_network() {
   #   mainnet = 143   (0x8f)
   # On any failure (no RPC, wrong chain, parse error) fall back to "testnet"
   # — the safer default for a fresh install that hasn't been pointed at mainnet.
+  #
+  # LOCAL_RPC_URL default is http://host.docker.internal:8080 — that hostname
+  # only resolves INSIDE the docker network, not on the host where install.sh
+  # runs. Translate to a host-side equivalent for the probe.
+  local probe_url="$LOCAL_RPC_URL"
+  probe_url="${probe_url/host.docker.internal/127.0.0.1}"
   local chain_id
   chain_id=$(curl -sf -m 3 -X POST -H 'Content-Type: application/json' \
     -d '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' \
-    "$LOCAL_RPC_URL" 2>/dev/null \
+    "$probe_url" 2>/dev/null \
     | python3 -c 'import json,sys;r=json.load(sys.stdin);print(int(r["result"],16))' 2>/dev/null)
   case "$chain_id" in
     10143) echo "testnet" ;;
