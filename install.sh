@@ -707,10 +707,20 @@ do_upgrade() {
   [[ -d "$PREFIX/.git" ]] || fatal "$PREFIX is not a git checkout — install first."
   info "Upgrading $PREFIX…"
   clone_or_update
+  # clone_or_update does `git reset --hard origin/main` which wipes any
+  # operator-side edits to prometheus.yml (host hostname, network label).
+  # Re-apply configure_prometheus so external_labels stay correct after
+  # every --upgrade.
+  configure_prometheus
   info "Pulling latest images…"
   (cd "$PREFIX" && docker compose pull) >> "$LOG_FILE" 2>&1
   info "Recreating containers…"
   (cd "$PREFIX" && docker compose up -d) >> "$LOG_FILE" 2>&1
+  # `docker compose up -d` is a no-op for services whose container spec
+  # didn't change — but prometheus reads its config file from a bind-mount,
+  # so we need to force-restart it to pick up our just-rewritten external_labels.
+  info "Restarting prometheus to load updated external_labels…"
+  (cd "$PREFIX" && docker compose restart prometheus) >> "$LOG_FILE" 2>&1
   ok "Upgraded."
   verify || true
 }
