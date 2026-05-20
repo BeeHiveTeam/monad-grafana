@@ -473,8 +473,12 @@ configure_prometheus() {
     net=$(detect_monad_network)
   fi
   if [[ -n "$net" ]]; then
+    # Replace network label everywhere in prometheus.yml: both in
+    # global.external_labels AND in every scrape_configs[].static_configs[].labels
+    # (the latter is what shows up in /api/v1/query results — external_labels
+    # only propagate via federation/remote_write).
     sed -i -E "s/^([[:space:]]+network:[[:space:]]+).*/\1${net}/" "$prom"
-    ok "Prometheus external_labels: network=$net (chain_id-detected)"
+    ok "Prometheus network label (external + per-job): $net (chain_id-detected)"
     # Switch PUBLIC_RPC_URL to the matching public endpoint if the operator
     # didn't pass --public-rpc= explicitly (we left default testnet-rpc.monad.xyz).
     if [[ "$net" == "mainnet" && "$PUBLIC_RPC_URL" == "https://testnet-rpc.monad.xyz" ]]; then
