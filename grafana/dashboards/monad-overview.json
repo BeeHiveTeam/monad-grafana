@@ -2366,7 +2366,7 @@
       "pluginVersion": "11.3.0",
       "targets": [
         {
-          "expr": "max by (network) (up{job=\"prometheus\"})",
+          "expr": "max by (network) (up{job=\"prometheus\",network!=\"\"})",
           "refId": "A",
           "instant": true,
           "legendFormat": "{{network}}",
