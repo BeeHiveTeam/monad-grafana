@@ -21,7 +21,7 @@
       },
       "gridPos": {
         "h": 3,
-        "w": 8,
+        "w": 6,
         "x": 0,
         "y": 1
       },
@@ -69,8 +69,8 @@
       },
       "gridPos": {
         "h": 3,
-        "w": 8,
-        "x": 8,
+        "w": 6,
+        "x": 6,
         "y": 1
       },
       "fieldConfig": {
@@ -117,8 +117,8 @@
       },
       "gridPos": {
         "h": 3,
-        "w": 8,
-        "x": 16,
+        "w": 6,
+        "x": 12,
         "y": 1
       },
       "fieldConfig": {
@@ -151,6 +151,84 @@
           },
           "legendFormat": "{{network}}",
           "format": "table",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 77,
+      "type": "stat",
+      "title": "VDP status",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Checks that monad metrics carry the secp_key label (set by MF push setup) and the OTel collector is reachable. Red = VDP push not configured or collector down.",
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "\u26a0 NOT COMPLIANT",
+                  "color": "red",
+                  "index": 0
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "\u2713 COMPLIANT",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "red"
+              },
+              {
+                "value": 1,
+                "color": "green"
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "(count(monad_node_info{secp_key!=\"\"}) > bool 0) * (max(up{job=\"monad-otelcol\"}) > bool 0)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
           "instant": true
         }
       ]
