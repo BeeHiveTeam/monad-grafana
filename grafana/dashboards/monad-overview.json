@@ -181,12 +181,7 @@
                   "text": "\u26a0 NOT COMPLIANT",
                   "color": "red",
                   "index": 0
-                }
-              }
-            },
-            {
-              "type": "value",
-              "options": {
+                },
                 "1": {
                   "text": "\u2713 COMPLIANT",
                   "color": "green",
