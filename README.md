@@ -57,11 +57,18 @@ If you run a custom `otelcol-contrib` with `journald → Loki` plus VDP push (th
 
 ## Quick start
 
-### One command — loopback only (SSH-tunnel access)
+The installer asks two questions on first run:
+
+1. **All-in-one or Split?** All-in-one puts monitoring on the same server as the Monad node (quick); Split puts monitoring on a separate server (recommended by Monad Foundation security advisory).
+2. **If Split — which server are you on?** Monitor server or Monad node.
+
+### Deployment mode 1 — All-in-one (monitoring on the same server as the node)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/BeeHiveTeam/monad-grafana/main/install.sh | sudo bash
 ```
+
+Choose `[1] All-in-one` when prompted. The installer prints a **security warning** explaining the risk (single attack surface, resource contention with monad-execution, single point of failure) and asks for an explicit `y` to continue.
 
 Grafana ends up on `127.0.0.1:3000`. Access from your laptop:
 
@@ -69,6 +76,38 @@ Grafana ends up on `127.0.0.1:3000`. Access from your laptop:
 ssh -L 3000:127.0.0.1:3000 -L 9090:127.0.0.1:9090 user@your.server
 # then open http://localhost:3000
 ```
+
+### Deployment mode 2 — Split (monitoring on a separate server)
+
+Run the same installer on **both** servers — it auto-detects which side it's on.
+
+**Step 1: on the Monad node.**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/BeeHiveTeam/monad-grafana/main/install.sh | sudo bash
+```
+
+Choose `[2] Split` → `[2] Monad node`. Enter the monitor server's IP when asked.
+The installer:
+- installs `prometheus-node-exporter` (systemd, binds `0.0.0.0:9100`)
+- opens UFW from monitor-IP → `:8889` (otelcol), `:9100` (node-exporter), `:8080` (RPC)
+- self-tests all three endpoints
+- prints "ready"
+
+**Step 2: on the monitoring server.**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/BeeHiveTeam/monad-grafana/main/install.sh | sudo bash
+```
+
+Choose `[2] Split` → `[1] Monitoring server`. Enter the Monad node's IP when asked.
+The installer:
+- probes node:8889/9100/8080 to confirm reachability and detect testnet/mainnet
+- if step 1 hasn't been done yet, prints the exact command to run on the node and **polls every 10s for 5 minutes** until ports come up — then auto-continues
+- writes `prometheus.yml` with the remote node IP as scrape target
+- brings up Prometheus + Grafana
+
+**Either order works** — start on whichever server you have a terminal open on.
 
 ### One command — public access (browser direct, with admin password)
 
