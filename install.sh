@@ -265,8 +265,11 @@ probe_remote_network() {
   esac
 }
 
-# Test 3 endpoints on the node-side host. Echoes "" if all reachable, error text otherwise.
-# Sets MONAD_NETWORK_DETECTED as side-effect on success.
+# Test 3 endpoints on the node-side host. Returns 0 if all reachable, 1 otherwise.
+# IMPORTANT: this sets globals (MONAD_NETWORK_DETECTED, REACHABILITY_ERRORS) and
+# must therefore be called DIRECTLY — never inside $(...) command substitution,
+# which would run it in a subshell and discard those assignments.
+REACHABILITY_ERRORS=""
 test_remote_node_reachability() {
   local host="$1"
   local errs=()
@@ -279,8 +282,8 @@ test_remote_node_reachability() {
   fi
   probe_http "http://$host:8889/metrics" || errs+=( ":8889 otelcol metrics unreachable" )
   probe_http "http://$host:9100/metrics" || errs+=( ":9100 node-exporter unreachable" )
-  if [[ ${#errs[@]} -eq 0 ]]; then echo ""; return 0; fi
-  printf '%s\n' "${errs[@]}"
+  if [[ ${#errs[@]} -eq 0 ]]; then REACHABILITY_ERRORS=""; return 0; fi
+  REACHABILITY_ERRORS=$(printf '%s\n' "${errs[@]}")
   return 1
 }
 
@@ -947,13 +950,14 @@ prompt_node_host() {
 # node-side command and poll until reachable (or POLL_TIMEOUT_SEC elapses).
 wait_for_node_side() {
   info "Testing connectivity to $NODE_HOST..."
-  local err
-  if err=$(test_remote_node_reachability "$NODE_HOST"); then
-    info "All endpoints reachable on first try."
+  # Call directly (NOT in $()) so MONAD_NETWORK_DETECTED + REACHABILITY_ERRORS
+  # set inside the function survive into this scope.
+  if test_remote_node_reachability "$NODE_HOST"; then
+    info "All endpoints reachable on first try (network: ${MONAD_NETWORK_DETECTED:-unknown})."
     return 0
   fi
 
-  echo "$err" | while IFS= read -r line; do err "  ${line}"; done
+  while IFS= read -r line; do [[ -n "$line" ]] && err "  ${line}"; done <<< "$REACHABILITY_ERRORS"
 
   local my_ip
   my_ip=$(detect_my_ip)
