@@ -1,0 +1,41 @@
+groups:
+  - name: monad-connectivity
+    rules:
+      # The failure that the old "Active peers" panel hid: discovery keeps
+      # reporting hundreds of known peers while live wireauth sessions collapse,
+      # so the node is effectively isolated but the dashboard looks fine.
+      - alert: MonadPeerSessionsCollapsed
+        expr: monad_wireauth_udp_state_transport_sessions < 5
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Monad node has <5 live peer sessions ({{ $value }})"
+          description: >-
+            transport_sessions={{ $value }} for 10m. These are fully established
+            wireauth sessions (actual connections). Known-via-discovery peers can
+            stay high while this collapses — that is the masked-outage signature.
+            Tune the threshold to your network's normal session count.
+
+      # Explicit divergence detector: many known peers, almost no real sessions.
+      - alert: MonadPeersKnownButDisconnected
+        expr: monad_peer_disc_num_peers > 50 and monad_wireauth_udp_state_transport_sessions < 5
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Monad node knows many peers but is not connected to them"
+          description: >-
+            num_peers={{ with query "monad_peer_disc_num_peers" }}{{ . | first | value }}{{ end }}
+            but transport_sessions<5. Discovery routing table is populated while
+            live sessions are gone — the node is isolated.
+
+      # Scrape target down — metrics stopped flowing entirely.
+      - alert: MonadOtelcolDown
+        expr: up{job="monad-otelcol"} == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Monad otelcol metrics endpoint is down"
+          description: "Prometheus cannot scrape host.docker.internal:8889 for 3m."

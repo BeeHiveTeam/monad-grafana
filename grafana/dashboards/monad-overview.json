@@ -695,11 +695,11 @@
               },
               {
                 "color": "yellow",
-                "value": 50
+                "value": 5
               },
               {
                 "color": "green",
-                "value": 150
+                "value": 10
               }
             ]
           },
@@ -715,7 +715,9 @@
       "id": 14,
       "targets": [
         {
-          "expr": "monad_peer_disc_num_peers",
+          "refId": "A",
+          "expr": "monad_wireauth_udp_state_transport_sessions",
+          "legendFormat": "active",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -727,7 +729,8 @@
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
-      }
+      },
+      "description": "Live authenticated wireauth sessions (monad_wireauth_udp_state_transport_sessions) \u2014 peers we are ACTUALLY connected to. NOT the discovery routing table. Collapses to ~0 when the node loses connectivity, unlike 'Known (disc)'."
     },
     {
       "fieldConfig": {
@@ -2520,6 +2523,56 @@
         "colorMode": "value",
         "graphMode": "none",
         "textMode": "name"
+      }
+    },
+    {
+      "id": 72,
+      "type": "stat",
+      "title": "Known (disc)",
+      "description": "Peers known via discovery routing table (monad_peer_disc_num_peers). Does NOT mean connected \u2014 stays high even when sessions die. High here + low 'Active peers' = node isolated.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 3,
+        "x": 21,
+        "y": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "monad_peer_disc_num_peers",
+          "legendFormat": "known",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        }
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value"
       }
     }
   ],
