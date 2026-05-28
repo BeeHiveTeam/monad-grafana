@@ -134,15 +134,23 @@ def _text_edit(text):
 
 def _pipeline_has_hostmetrics(text):
     import re
-    # Find the metrics pipeline receivers list
+    # Inline flow list: receivers: [a, b]
     m = re.search(
         r'service:\s*\n(?:.*\n)*?\s*pipelines:\s*\n(?:.*\n)*?\s*metrics:\s*\n(?:.*\n)*?\s*receivers:\s*\[([^\]]*)\]',
         text)
-    return m and 'hostmetrics' in m.group(1)
+    if m:
+        return 'hostmetrics' in m.group(1)
+    # Block list: receivers:\n  - a\n  - b
+    bm = re.search(
+        r'service:\s*\n(?:.*\n)*?\s*pipelines:\s*\n(?:.*\n)*?\s*metrics:\s*\n(?:.*\n)*?^\s*receivers:[ \t]*\n'
+        r'((?:[ \t]*-[ \t]*\S+[ \t]*\n)+)',
+        text, re.MULTILINE)
+    return bool(bm and 'hostmetrics' in bm.group(1))
 
 
 def _add_to_metrics_pipeline(text):
     import re
+    # Style 1 — inline flow list:  receivers: [otlp, prometheus]
     pat = re.compile(
         r'(service:\s*\n(?:.*\n)*?\s*pipelines:\s*\n(?:.*\n)*?\s*metrics:\s*\n(?:.*\n)*?\s*receivers:\s*\[)([^\]]*)(\])')
     m = pat.search(text)
@@ -152,7 +160,27 @@ def _add_to_metrics_pipeline(text):
             return text
         new_list = (existing + ', hostmetrics') if existing else 'hostmetrics'
         return text[:m.start(2)] + new_list + text[m.end(2):]
-    print("WARNING: couldn't find 'service.pipelines.metrics.receivers' — manual edit needed.", file=sys.stderr)
+
+    # Style 2 — block list:
+    #   metrics:
+    #     receivers:
+    #       - otlp
+    #       - prometheus
+    block_pat = re.compile(
+        r'service:\s*\n(?:.*\n)*?\s*pipelines:\s*\n(?:.*\n)*?\s*metrics:\s*\n(?:.*\n)*?^(\s*)receivers:[ \t]*\n'
+        r'((?:[ \t]*-[ \t]*\S+[ \t]*\n)+)',
+        re.MULTILINE)
+    bm = block_pat.search(text)
+    if bm:
+        listblock = bm.group(2)
+        if 'hostmetrics' in listblock:
+            return text
+        im = re.match(r'([ \t]*)-', listblock)
+        item_indent = im.group(1) if im else (bm.group(1) + '  ')
+        insert_at = bm.start(2)   # start of the first '- item' line
+        return text[:insert_at] + f"{item_indent}- hostmetrics\n" + text[insert_at:]
+
+    print("WARNING: couldn't find 'service.pipelines.metrics.receivers' (inline or block) — manual edit needed.", file=sys.stderr)
     return text
 
 

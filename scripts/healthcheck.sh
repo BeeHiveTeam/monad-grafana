@@ -91,6 +91,10 @@ if gap=$(curl -fsS -m 3 "$PROM/api/v1/query?query=monad_sync_gap_blocks" 2>/dev/
   else
     check "sync.gap" "fail" "$gap blocks (severely behind)"
   fi
+else
+  # curl/python pipeline itself errored (Prometheus unreachable / non-JSON body).
+  # Fail closed — never let a query error silently drop the check from output.
+  check "sync.gap" "fail" "query failed (Prometheus unreachable?)"
 fi
 
 # 5. Last block age (liveness)
@@ -107,6 +111,8 @@ if age=$(curl -fsS -m 3 "$PROM/api/v1/query?query=monad_last_block_age_seconds" 
   else
     check "block.age" "fail" "${age}s — node may be stuck"
   fi
+else
+  check "block.age" "fail" "query failed (Prometheus unreachable?)"
 fi
 
 # 6. Grafana healthy
@@ -124,6 +130,8 @@ if hm=$(curl -fsS -m 3 "$PROM/api/v1/query?query=system_cpu_load_average_1m" 2>/
   else
     check "otelcol.hostmetrics" "warn" "not enabled — run install.sh --enable-hostmetrics"
   fi
+else
+  check "otelcol.hostmetrics" "warn" "query failed (Prometheus unreachable?)"
 fi
 
 # 8. NTP / clock sync (vote_delay accuracy depends on this)

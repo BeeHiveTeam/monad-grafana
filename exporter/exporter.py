@@ -23,15 +23,25 @@ PUBLIC_RPC_URL = os.environ.get('PUBLIC_RPC_URL', 'https://testnet-rpc.monad.xyz
 state = {
     'local': 0, 'public': 0, 'local_ok': 0, 'public_ok': 0,
     'last_block_ts': 0, 'updated_at': 0,
+    # chain_match: 1 = local and public RPC are the same network, 0 = mismatch,
+    # -1 = not yet determined / a chain_id probe failed. The sync-gap metric is
+    # only meaningful when chain_match == 1.
+    'chain_match': -1,
     'uptime': {}
 }
 
-def fetch_block_number(url):
+def _rpc(url, method, params=None):
     req = urllib.request.Request(url,
-        data=json.dumps({"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]}).encode(),
+        data=json.dumps({"jsonrpc":"2.0","id":1,"method":method,"params":params or []}).encode(),
         headers={'Content-Type':'application/json'})
     with urllib.request.urlopen(req, timeout=5) as r:
-        return int(json.loads(r.read())['result'], 16)
+        return json.loads(r.read())['result']
+
+def fetch_block_number(url):
+    return int(_rpc(url, "eth_blockNumber"), 16)
+
+def fetch_chain_id(url):
+    return int(_rpc(url, "eth_chainId"), 16)
 
 def fetch_block_ts(url, blk_hex):
     req = urllib.request.Request(url,
@@ -46,7 +56,13 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path != '/metrics':
             self.send_error(404); return
-        gap = state['public'] - state['local'] if state['local'] and state['public'] else 0
+        # Only report a sync gap when local and public RPC are the same network.
+        # Comparing block heights across different chains (e.g. a mainnet node vs
+        # the testnet public RPC default) yields a meaningless gap that would
+        # trip false stall/lag alerts.
+        gap = (state['public'] - state['local']
+               if state['local'] and state['public'] and state['chain_match'] == 1
+               else 0)
         block_age = max(0, int(time.time()) - state['last_block_ts']) if state['last_block_ts'] else 0
         body = (
             "# HELP monad_local_block_number Block height of our node\n# TYPE monad_local_block_number gauge\n"
@@ -59,6 +75,8 @@ class H(BaseHTTPRequestHandler):
             f"monad_rpc_local_up {state['local_ok']}\n"
             "# HELP monad_rpc_public_up Public RPC responded last cycle\n# TYPE monad_rpc_public_up gauge\n"
             f"monad_rpc_public_up {state['public_ok']}\n"
+            "# HELP monad_rpc_network_mismatch 1 if local and public RPC are different chains (sync gap suppressed), 0 if same, -1 unknown\n# TYPE monad_rpc_network_mismatch gauge\n"
+            f"monad_rpc_network_mismatch {0 if state['chain_match'] == 1 else (1 if state['chain_match'] == 0 else -1)}\n"
             "# HELP monad_rpc_exporter_updated_seconds Unix ts of last update\n# TYPE monad_rpc_exporter_updated_seconds gauge\n"
             f"monad_rpc_exporter_updated_seconds {state['updated_at']}\n"
             "# HELP monad_last_block_age_seconds Seconds since latest block was produced (on-chain timestamp)\n# TYPE monad_last_block_age_seconds gauge\n"
@@ -87,6 +105,13 @@ def updater_blocks():
         try:
             state['public'] = fetch_block_number(PUBLIC_RPC_URL); state['public_ok'] = 1
         except Exception: state['public_ok'] = 0
+        # Verify local and public RPC are the same network before trusting the
+        # sync gap. A chain_id probe failure leaves chain_match unknown (-1).
+        if state['local_ok'] and state['public_ok']:
+            try:
+                state['chain_match'] = 1 if fetch_chain_id(LOCAL_RPC_URL) == fetch_chain_id(PUBLIC_RPC_URL) else 0
+            except Exception:
+                state['chain_match'] = -1
         state['updated_at'] = int(time.time())
         time.sleep(10)
 

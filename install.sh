@@ -1040,10 +1040,35 @@ do_install_node_side() {
   info "─── Node-side preparation for remote monitoring ──────────"
   prompt_monitor_ip
 
+  # node-exporter will bind 0.0.0.0:9100 and we open RPC/otelcol to the monitor.
+  # Without an active firewall those ports (host CPU/mem/disk, RPC) are exposed
+  # to the whole internet. Refuse to proceed unless UFW is active or the
+  # operator explicitly opts out (e.g. they run an external/cloud firewall).
+  require_firewall_or_optout
+
   install_node_exporter_systemd
   configure_ufw_for_monitor "$MONITOR_IP"
   selftest_node_side
   print_node_side_done
+}
+
+# Guard the node-side install: node-exporter on 0.0.0.0:9100 + opened RPC ports
+# must sit behind a firewall. Hard-fail if UFW is inactive, unless
+# ALLOW_UNFIREWALLED=1 (operator manages an external firewall).
+require_firewall_or_optout() {
+  if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
+    return 0
+  fi
+  if [[ "${ALLOW_UNFIREWALLED:-0}" == "1" ]]; then
+    warn "UFW inactive but ALLOW_UNFIREWALLED=1 — proceeding. Ensure an external"
+    warn "firewall restricts :9100/:8889/:8080 to the monitor host ${MONITOR_IP}."
+    return 0
+  fi
+  fatal "UFW is not active. node-exporter binds 0.0.0.0:9100 (exposes host metrics)
+  and this step opens :8889/:8080 — leaving them world-reachable without a firewall.
+  Enable UFW first:   sudo ufw --force enable
+  Or, if you run an external/cloud firewall that already restricts these ports to
+  ${MONITOR_IP}, re-run with:   ALLOW_UNFIREWALLED=1 sudo ./install.sh"
 }
 
 prompt_monitor_ip() {
