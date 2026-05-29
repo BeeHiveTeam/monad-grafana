@@ -27,12 +27,17 @@ check() {
   local name="$1" status="$2" detail="${3:-}"
   RESULT["$name.status"]="$status"
   RESULT["$name.detail"]="$detail"
-  if [[ "$status" != "ok" ]]; then
-    EXIT=1
-    [[ $QUIET -eq 0 ]] && echo "✗ $name: $detail" >&2
-  else
-    [[ $QUIET -eq 0 ]] && echo "✓ $name${detail:+: $detail}"
-  fi
+  case "$status" in
+    ok)
+      [[ $QUIET -eq 0 ]] && echo "✓ $name${detail:+: $detail}" ;;
+    warn)
+      # Non-fatal: a degraded-but-acceptable state (catching up, mild lag) must
+      # NOT fail the exit code, or cron/CI flaps on transient conditions.
+      [[ $QUIET -eq 0 ]] && echo "⚠ $name${detail:+: $detail}" >&2 ;;
+    *)
+      EXIT=1
+      [[ $QUIET -eq 0 ]] && echo "✗ $name: $detail" >&2 ;;
+  esac
 }
 
 # 1. Containers up — try docker, fall back if no perms (rely on Prometheus targets instead)

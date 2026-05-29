@@ -75,13 +75,23 @@ def main():
     shutil.copy2(CONFIG, backup)
     print(f"Backed up {CONFIG} → {backup}")
 
-    # Try PyYAML for safer edit; fall back to text insertion
-    try:
-        import yaml
-        text = _yaml_edit(text, yaml)
-    except ImportError:
-        print("PyYAML not installed — falling back to text insertion (less robust).")
-        text = _text_edit(text)
+    # Prefer comment-preserving text insertion. PyYAML's safe_dump rewrites the
+    # WHOLE file and strips every comment — destructive for a hand-maintained
+    # otelcol config (VDP push creds, operator notes). Only fall back to PyYAML
+    # if the text editor couldn't place the receiver (unusual layout).
+    edited = _text_edit(text)
+    if 'hostmetrics:' in edited and _pipeline_has_hostmetrics(edited):
+        text = edited
+    else:
+        try:
+            import yaml
+            print("Text insertion couldn't place hostmetrics — using PyYAML "
+                  "(NOTE: comments in the config are not preserved).")
+            text = _yaml_edit(text, yaml)
+        except ImportError:
+            print("PyYAML unavailable and text insertion incomplete — wrote a "
+                  "best-effort text edit; verify hostmetrics is in the metrics pipeline.")
+            text = edited
 
     _write(CONFIG, text)
     print(f"Wrote updated {CONFIG}.")

@@ -739,7 +739,11 @@ start_stack() {
 
 setup_ufw() {
   if ! command -v ufw >/dev/null || ! ufw status >/dev/null 2>&1; then
-    info "ufw not active — skipping firewall step. If you use iptables/nftables/firewalld, manually allow docker-bridge → :8889 and :8080."
+    if (( PUBLIC_ACCESS == 1 )); then
+      warn "ufw is NOT active, but --public bound Grafana to 0.0.0.0:3000 — the web UI (admin login + generated password, plain HTTP) is reachable from ANYWHERE with no firewall. Enable a firewall and allow only trusted IPs to :3000, or drop --public to bind 127.0.0.1."
+    else
+      info "ufw not active — skipping firewall step. If you use iptables/nftables/firewalld, manually allow docker-bridge → :8889 and :8080."
+    fi
     return
   fi
 
