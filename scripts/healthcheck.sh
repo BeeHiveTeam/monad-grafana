@@ -64,17 +64,32 @@ fi
 
 # 3. All scrape targets up
 if targets=$(curl -fsS -m 5 "$PROM/api/v1/targets" 2>/dev/null); then
-  while IFS=$'\t' read -r job health err; do
-    if [[ "$health" == "up" ]]; then
-      check "target.$job" "ok"
-    else
-      check "target.$job" "fail" "${err:-unknown}"
-    fi
-  done < <(echo "$targets" | python3 -c "
+  # Parse first, THEN check. A malformed or empty activeTargets payload used to
+  # make the while-loop iterate zero times — recording no target check and no
+  # failure (the stack looked healthy while all targets were missing). Now an
+  # unparseable or empty payload fails closed.
+  parsed=$(echo "$targets" | python3 -c "
 import json, sys
-d = json.load(sys.stdin)
-for t in d['data']['activeTargets']:
+try:
+    items = json.load(sys.stdin)['data']['activeTargets']
+except Exception:
+    sys.exit(1)
+for t in items:
     print(f\"{t['labels'].get('job','?')}\t{t['health']}\t{(t.get('lastError') or '')[:80]}\")")
+  rc=$?
+  if (( rc != 0 )); then
+    check "prometheus.targets" "fail" "unparseable /targets payload"
+  elif [[ -z "$parsed" ]]; then
+    check "prometheus.targets" "fail" "no active scrape targets"
+  else
+    while IFS=$'\t' read -r job health err; do
+      if [[ "$health" == "up" ]]; then
+        check "target.$job" "ok"
+      else
+        check "target.$job" "fail" "${err:-unknown}"
+      fi
+    done <<< "$parsed"
+  fi
 else
   check "prometheus.targets" "fail" "API unreachable"
 fi
