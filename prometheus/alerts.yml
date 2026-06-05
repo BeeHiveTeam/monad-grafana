@@ -39,3 +39,36 @@ groups:
         annotations:
           summary: "Monad otelcol metrics endpoint is down"
           description: "Prometheus cannot scrape host.docker.internal:8889 for 3m."
+
+      # Upstream validators are the peers that feed this full-node proposals.
+      # Below ~3 a full-node risks the "local timeout deadlock" (stops receiving
+      # proposals, freezes, can't self-recover). This is the FUNCTIONAL signal —
+      # more reliable than raw session count, which bursts/prunes around restarts.
+      - alert: MonadUpstreamValidatorsLow
+        expr: monad_peer_disc_num_upstream_validators < 3
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Monad node has <3 upstream validators ({{ $value }})"
+          description: >-
+            num_upstream_validators={{ $value }} for 15m. Below ~3 a full-node
+            can stop receiving proposals and hit the local-timeout deadlock that
+            only a restart recovers. Tune to your network's healthy value.
+
+      # Session working-set collapsed far below baseline (but not yet <5). Catches
+      # the slow decay pattern — e.g. ~140 steady-state sliding to single digits
+      # over hours — BEFORE it trips the <5 MonadPeerSessionsCollapsed critical.
+      # 30m for: avoids the legitimate post-restart prune from the burst peak.
+      - alert: MonadPeerSessionsDecayed
+        expr: monad_wireauth_udp_state_transport_sessions < 30
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Monad live peer sessions decayed to {{ $value }} (baseline is much higher)"
+          description: >-
+            transport_sessions={{ $value }} for 30m, well below this node's normal
+            working set. Early signal of a peering/session-management regression;
+            a monad-bft restart typically restores it. If it recurs, report it.
+            Tune the threshold (30) to your node's observed baseline.
