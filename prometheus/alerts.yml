@@ -56,19 +56,21 @@ groups:
             can stop receiving proposals and hit the local-timeout deadlock that
             only a restart recovers. Tune to your network's healthy value.
 
-      # Session working-set collapsed far below baseline (but not yet <5). Catches
-      # the slow decay pattern — e.g. ~140 steady-state sliding to single digits
-      # over hours — BEFORE it trips the <5 MonadPeerSessionsCollapsed critical.
+      # Session working-set collapsed toward single digits (but not yet <5).
+      # Catches a genuine decay BEFORE it trips the <5 MonadPeerSessionsCollapsed
+      # critical. Threshold 15 sits below the observed stable working set on
+      # 0.14.5 (~28-42) but above the degraded ~7-10 seen before a recovery
+      # restart, so it fires on a real collapse, not on the normal level.
       # 30m for: avoids the legitimate post-restart prune from the burst peak.
       - alert: MonadPeerSessionsDecayed
-        expr: monad_wireauth_udp_state_transport_sessions < 30
+        expr: monad_wireauth_udp_state_transport_sessions < 15
         for: 30m
         labels:
           severity: warning
         annotations:
-          summary: "Monad live peer sessions decayed to {{ $value }} (baseline is much higher)"
+          summary: "Monad live peer sessions decayed to {{ $value }} (recovery restart usually helps)"
           description: >-
-            transport_sessions={{ $value }} for 30m, well below this node's normal
-            working set. Early signal of a peering/session-management regression;
-            a monad-bft restart typically restores it. If it recurs, report it.
-            Tune the threshold (30) to your node's observed baseline.
+            transport_sessions={{ $value }} for 30m, below this node's healthy
+            working set. Signal of a peering/session-management slide toward
+            isolation; a monad-bft restart typically restores it. If it recurs,
+            report it. Tune the threshold (15) to your node's observed baseline.
