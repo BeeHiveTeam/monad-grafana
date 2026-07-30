@@ -30,6 +30,16 @@ state = {
     'uptime': {}
 }
 
+# Список сервисов держим в одном месте: и опрос /proc, и экспозиция monad_service_up
+# должны знать ПОЛНЫЙ набор, иначе упавший сервис просто исчезает из выдачи вместо того,
+# чтобы показать 0.
+SERVICE_COMMS = [
+    ('monad-bft', 'monad-node'),
+    ('monad-execution', 'monad'),
+    ('monad-rpc', 'monad-rpc'),
+]
+SERVICES = [s for s, _ in SERVICE_COMMS]
+
 def _rpc(url, method, params=None):
     req = urllib.request.Request(url,
         data=json.dumps({"jsonrpc":"2.0","id":1,"method":method,"params":params or []}).encode(),
@@ -60,18 +70,23 @@ class H(BaseHTTPRequestHandler):
         # Comparing block heights across different chains (e.g. a mainnet node vs
         # the testnet public RPC default) yields a meaningless gap that would
         # trip false stall/lag alerts.
-        gap = (state['public'] - state['local']
-               if state['local'] and state['public'] and state['chain_match'] == 1
-               else 0)
-        block_age = max(0, int(time.time()) - state['last_block_ts']) if state['last_block_ts'] else 0
+        # ABSENCE IS NOT ZERO. Previously gap and block_age fell back to 0 when there was no
+        # data, and 0 reads as "perfectly in sync" / "block just arrived": after an exporter
+        # restart while the node was down, healthcheck reported `✓ 0 blocks, ✓ 0s` and exit 0
+        # for a dead node. Prometheus treats a missing series correctly (absent() alerts on it),
+        # so when we do not know, we publish nothing at all.
+        have_gap = bool(state['local'] and state['public'] and state['chain_match'] == 1)
+        gap = (state['public'] - state['local']) if have_gap else None
+        have_age = bool(state['last_block_ts'])
+        block_age = max(0, int(time.time()) - state['last_block_ts']) if have_age else None
         body = (
             "# HELP monad_local_block_number Block height of our node\n# TYPE monad_local_block_number gauge\n"
             f"monad_local_block_number {state['local']}\n"
             "# HELP monad_public_block_number Block height of public testnet RPC\n# TYPE monad_public_block_number gauge\n"
             f"monad_public_block_number {state['public']}\n"
             "# HELP monad_sync_gap_blocks Public minus local (positive = we lag)\n# TYPE monad_sync_gap_blocks gauge\n"
-            f"monad_sync_gap_blocks {gap}\n"
-            "# HELP monad_rpc_local_up Local RPC responded last cycle\n# TYPE monad_rpc_local_up gauge\n"
+            + (f"monad_sync_gap_blocks {gap}\n" if gap is not None else "")
+            + "# HELP monad_rpc_local_up Local RPC responded last cycle\n# TYPE monad_rpc_local_up gauge\n"
             f"monad_rpc_local_up {state['local_ok']}\n"
             "# HELP monad_rpc_public_up Public RPC responded last cycle\n# TYPE monad_rpc_public_up gauge\n"
             f"monad_rpc_public_up {state['public_ok']}\n"
@@ -80,15 +95,27 @@ class H(BaseHTTPRequestHandler):
             "# HELP monad_rpc_exporter_updated_seconds Unix ts of last update\n# TYPE monad_rpc_exporter_updated_seconds gauge\n"
             f"monad_rpc_exporter_updated_seconds {state['updated_at']}\n"
             "# HELP monad_last_block_age_seconds Seconds since latest block was produced (on-chain timestamp)\n# TYPE monad_last_block_age_seconds gauge\n"
-            f"monad_last_block_age_seconds {block_age}\n"
-            "# HELP monad_last_block_timestamp Unix ts of latest block (on-chain)\n# TYPE monad_last_block_timestamp gauge\n"
+            + (f"monad_last_block_age_seconds {block_age}\n" if block_age is not None else "")
+            + "# HELP monad_last_block_timestamp Unix ts of latest block (on-chain)\n# TYPE monad_last_block_timestamp gauge\n"
             f"monad_last_block_timestamp {state['last_block_ts']}\n"
+            "# HELP monad_service_up 1 if the systemd service is running, 0 if not\n# TYPE monad_service_up gauge\n"
             "# HELP monad_service_uptime_seconds Uptime of monad-* systemd service\n# TYPE monad_service_uptime_seconds gauge\n"
         )
         now = int(time.time())
-        for svc, started in state['uptime'].items():
-            if started > 0:
-                body += f'monad_service_uptime_seconds{{service="{svc}"}} {now - started}\n'
+        # Iterate over a snapshot: updater_uptime() mutates this dict from another thread, and
+        # a concurrent insert raised "dictionary changed size during iteration", failing the scrape.
+        snapshot = dict(state['uptime'])
+        up_lines, uptime_lines = "", ""
+        for svc in SERVICES:
+            started = snapshot.get(svc, 0)
+            running = 1 if started and started > 0 else 0
+            up_lines += f'monad_service_up{{service="{svc}"}} {running}\n'
+            # Only publish uptime for a service that is actually running. The old code never
+            # removed dead entries, so uptime kept CLIMBING after a crash and "service down"
+            # was indistinguishable from "service up" — there was no way to alert on it at all.
+            if running:
+                uptime_lines += f'monad_service_uptime_seconds{{service="{svc}"}} {now - started}\n'
+        body += up_lines + uptime_lines
         self.send_response(200); self.send_header('Content-Type','text/plain; version=0.0.4'); self.end_headers()
         self.wfile.write(body.encode())
 
@@ -118,13 +145,12 @@ def updater_blocks():
 def updater_uptime():
     # Requires `pid: host` in docker-compose to access host /proc.
     # Maps systemd service name → comm (process name in /proc/<pid>/comm).
-    services = [
-        ('monad-bft', 'monad-node'),
-        ('monad-execution', 'monad'),
-        ('monad-rpc', 'monad-rpc'),
-    ]
+    services = SERVICE_COMMS
     while True:
         for svc, comm_pattern in services:
+            # Clear the previous reading first: without this a dead service kept its old
+            # start_time forever and its uptime metric kept growing, so a crash was invisible.
+            found = False
             try:
                 for pid_dir in os.listdir('/proc'):
                     if not pid_dir.isdigit(): continue
@@ -139,11 +165,16 @@ def updater_uptime():
                                 btime = int(line.split()[1]); break
                         hz = os.sysconf(os.sysconf_names['SC_CLK_TCK'])
                         state['uptime'][svc] = btime + start_ticks // hz
+                        found = True
                         break
                     except (FileNotFoundError, PermissionError, ProcessLookupError):
                         continue
             except Exception:
-                pass
+                # Could not scan /proc at all — do NOT claim the service is down, leave the
+                # previous reading alone (unknown != stopped).
+                found = state['uptime'].get(svc, 0) > 0
+            if not found:
+                state['uptime'][svc] = 0
         time.sleep(30)
 
 threading.Thread(target=updater_blocks, daemon=True).start()
