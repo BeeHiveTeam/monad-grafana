@@ -17,7 +17,7 @@ Behaviour:
   - Returns 0 on success/no-op, non-zero on error
 Falls back to plain text manipulation if PyYAML is not installed.
 """
-import os, sys, shutil, time
+import os, re, shutil, subprocess, sys, time
 
 def _default_config():
     for path in ('/etc/otelcol-contrib/config.yaml', '/etc/otelcol/config.yaml'):
@@ -45,12 +45,59 @@ HOSTMETRICS_BLOCK = """
         include_fs_types:
           fs_types: [ext4, xfs, btrfs, zfs]
           match_type: strict
-        include_mount_points:
-          mount_points: ['/', '/home', '/dev/triedb']
-          match_type: strict
+        # match_type: strict со списком путей означал, что метрики есть только у ровно
+        # этих точек. '/dev/triedb' — блочное устройство, а не точка монтирования, так что
+        # по нему метрик не было НИКОГДА; а типовые размещения (/mnt/triedb, отдельный
+        # раздел под ledger, /var/lib/monad) в список не попадали — заканчивающееся место
+        # под ledger было невидимо до остановки ноды.
+        exclude_mount_points:
+          mount_points: ['/proc/*', '/sys/*', '/run/*', '/dev/*', '/snap/*', '/var/lib/docker/*']
+          match_type: regexp
       network:
       paging:
 """
+
+
+def _has_hostmetrics_receiver(text):
+    """True только если hostmetrics определён как РЕАЛЬНЫЙ ресивер.
+
+    Раньше проверялась подстрока 'hostmetrics:' по всему файлу — совпадали и
+    закомментированные примеры, и блоки внутри service.pipelines. Итог: скрипт
+    печатал «already configured», но всё равно дописывал ссылку в pipeline, и otelcol
+    падал с undefined receiver.
+    """
+    in_receivers = False
+    for line in text.splitlines():
+        if not line.strip() or line.lstrip().startswith('#'):
+            continue
+        indent = len(line) - len(line.lstrip())
+        if indent == 0:
+            in_receivers = line.split(':', 1)[0].strip() == 'receivers'
+            continue
+        if in_receivers and re.match(r'\s+hostmetrics\s*:', line):
+            return True
+    return False
+
+
+def _validate_or_rollback(path, backup):
+    """Проверить конфиг otelcol и откатиться самим, если он невалиден.
+
+    install.sh умеет откатывать, но только по своим веткам; при прямом вызове
+    --enable-hostmetrics коллектор оставался лежать до конца этой ветки.
+    """
+    exe = shutil.which('otelcol-contrib') or shutil.which('otelcol')
+    if not exe:
+        print("NOTE: otelcol binary not found — config not validated", file=sys.stderr)
+        return True
+    rc = subprocess.run([exe, 'validate', '--config', path],
+                        capture_output=True, text=True)
+    if rc.returncode == 0:
+        return True
+    print("ERROR: resulting config is INVALID — rolling back:", file=sys.stderr)
+    print((rc.stderr or rc.stdout or '').strip()[:500], file=sys.stderr)
+    shutil.copy2(backup, path)
+    print(f"Restored {path} from {backup}", file=sys.stderr)
+    sys.exit(1)
 
 
 def main():
@@ -61,19 +108,27 @@ def main():
 
     text = open(CONFIG).read()
 
-    if 'hostmetrics:' in text:
-        print(f"hostmetrics already configured in {CONFIG} — no-op")
-        # Ensure pipeline references it (idempotent path)
+    # Back up BEFORE any possible write. The "already configured" branch below also modifies
+    # the file (it appends hostmetrics to the metrics pipeline), yet the backup used to be
+    # created only further down — so that path could leave otelcol with a pipeline referencing
+    # a receiver that does not exist ("undefined receiver: hostmetrics"), and install.sh's
+    # rollback then failed with "No backup found — manual recovery needed". Losing otelcol
+    # means losing the VDP push and every node metric.
+    backup = f"{CONFIG}.bak.{int(time.time())}"
+    shutil.copy2(CONFIG, backup)
+    print(f"Backed up {CONFIG} → {backup}")
+
+    # "hostmetrics:" as a bare substring matched commented-out examples and stray blocks
+    # anywhere in the file, including inside service.pipelines. Require a real receiver
+    # definition: a non-comment line indented under a top-level `receivers:` key.
+    if _has_hostmetrics_receiver(text):
+        print(f"hostmetrics receiver already defined in {CONFIG} — no-op")
         if not _pipeline_has_hostmetrics(text):
             text = _add_to_metrics_pipeline(text)
             _write(CONFIG, text)
             print("Added 'hostmetrics' to metrics pipeline.")
+            _validate_or_rollback(CONFIG, backup)
         return
-
-    # Backup
-    backup = f"{CONFIG}.bak.{int(time.time())}"
-    shutil.copy2(CONFIG, backup)
-    print(f"Backed up {CONFIG} → {backup}")
 
     # Prefer comment-preserving text insertion. PyYAML's safe_dump rewrites the
     # WHOLE file and strips every comment — destructive for a hand-maintained
@@ -130,7 +185,11 @@ def _text_edit(text):
     inserted_block = False
     for i, ln in enumerate(lines):
         out.append(ln)
-        if not inserted_block and ln.strip().startswith('receivers:'):
+        # Only a TOP-LEVEL `receivers:` key (zero indent) is the receiver section. Matching
+        # any line starting with "receivers:" also hit `receivers:` inside
+        # service.pipelines.metrics and the inline form `receivers: [otlp]`, which glued a
+        # 2-space-indented receiver block into the pipeline and produced an invalid config.
+        if not inserted_block and ln[:1] not in (' ', '\t') and ln.split(':', 1)[0].strip() == 'receivers':
             out.append(HOSTMETRICS_BLOCK.rstrip() + '\n')
             inserted_block = True
     if not inserted_block:
