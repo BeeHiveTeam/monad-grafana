@@ -673,8 +673,28 @@ configure_prometheus() {
       ok "PUBLIC_RPC_URL auto-switched to $PUBLIC_RPC_URL for mainnet"
     fi
   else
-    warn "Could not detect Monad network (eth_chainId failed). Leaving network=testnet."
-    warn "  Override with: NETWORK=mainnet sudo ./install.sh  (or edit prometheus.yml)"
+    # Failing to detect the network must NOT silently leave the testnet label in place.
+    # This is the DEFAULT situation for a mainnet validator: check_monad deliberately allows
+    # installing without monad-rpc.service, so the chain_id probe has nothing to talk to. The
+    # result was a dashboard labelled network=testnet pointing at the testnet public RPC, with
+    # monad_sync_gap_blocks permanently meaningless — i.e. no lag monitoring at all, announced
+    # by a single warn line that scrolls past.
+    warn "Could not detect Monad network (eth_chainId against ${probe_hint:-local RPC} failed)."
+    if (( ${NON_INTERACTIVE:-0} )); then
+      fatal "Refusing to guess the network in non-interactive mode. Re-run with NETWORK=testnet or NETWORK=mainnet."
+    fi
+    local ans=""
+    read -r -p "  Which network is this node on? [testnet/mainnet] " ans || true
+    case "${ans,,}" in
+      testnet|mainnet) net="${ans,,}" ;;
+      *) fatal "No network selected. Re-run with NETWORK=testnet or NETWORK=mainnet." ;;
+    esac
+    sed -i -E "s/^([[:space:]]+network:[[:space:]]+).*/\1${net}/" "$prom"
+    ok "Prometheus network label set to: $net (operator-provided)"
+    if [[ "$net" == "mainnet" && "$PUBLIC_RPC_URL" == "https://testnet-rpc.monad.xyz" ]]; then
+      PUBLIC_RPC_URL="https://rpc.monad.xyz"
+      ok "PUBLIC_RPC_URL auto-switched to $PUBLIC_RPC_URL for mainnet"
+    fi
   fi
 }
 
@@ -682,6 +702,23 @@ clone_or_update() {
   if [[ -d "$PREFIX/.git" ]]; then
     info "Existing git checkout at $PREFIX — updating to latest main…"
     git -C "$PREFIX" fetch origin main >> "$LOG_FILE" 2>&1
+    # `reset --hard` discards every local change to tracked files: tuned alert thresholds,
+    # extra scrape jobs, dashboard edits, compose limits. It used to run silently with no
+    # backup, so a re-run or `--upgrade` quietly reverted an operator's work — and the comment
+    # further down claiming "preserves any manual edits on re-run" was already false by then.
+    # Snapshot anything that differs, and say so, before touching the tree.
+    local _dirty
+    _dirty=$(git -C "$PREFIX" status --porcelain 2>/dev/null | grep -vE '^\?\?' || true)
+    if [[ -n "$_dirty" ]]; then
+      local _bk="${PREFIX%/}-local-changes-$(date -u +%Y%m%d-%H%M%S).tar.gz"
+      warn "Local modifications found in $PREFIX — they will be REVERTED to origin/main:"
+      git -C "$PREFIX" diff --stat 2>/dev/null | sed 's/^/    /' >&2
+      if git -C "$PREFIX" diff --name-only 2>/dev/null | tar czf "$_bk" -C "$PREFIX" -T - 2>/dev/null; then
+        warn "Backup of modified files: $_bk"
+      else
+        warn "Could not create $_bk — continuing, changes will be lost"
+      fi
+    fi
     git -C "$PREFIX" reset --hard origin/main >> "$LOG_FILE" 2>&1
   elif [[ -d "$PREFIX" && -n "$(ls -A "$PREFIX" 2>/dev/null)" ]]; then
     fatal "$PREFIX exists and is not empty (and not a git checkout). Backup or remove it first."
@@ -692,9 +729,31 @@ clone_or_update() {
   ok "Code in place at $PREFIX (commit $(git -C "$PREFIX" rev-parse --short HEAD))"
 }
 
+# Upsert one KEY=value in .env, preserving everything else (same approach as
+# apply_grafana_bind). Bailing out of generate_env() on an existing .env meant that
+# --local-rpc=/--public-rpc=, the mainnet PUBLIC_RPC_URL switch and split-mode NODE_HOST
+# never reached the file: after moving the node to a new IP, prometheus.yml was rewritten but
+# the exporter kept polling the old address, so block height froze and the sync gap was junk.
+env_upsert() {
+  local key="$1" val="$2" f="$PREFIX/.env"
+  [[ -f "$f" ]] || return 0
+  if grep -qE "^${key}=" "$f"; then
+    local cur
+    cur=$(grep -E "^${key}=" "$f" | head -1 | cut -d= -f2-)
+    [[ "$cur" == "$val" ]] && return 0
+    sed -i -E "s|^${key}=.*|${key}=${val//|/\\|}|" "$f"
+    ok "Updated ${key} in .env ($cur → $val)"
+  else
+    printf '%s=%s\n' "$key" "$val" >> "$f"
+    ok "Added ${key}=${val} to .env"
+  fi
+}
+
 generate_env() {
   if [[ -f "$PREFIX/.env" ]]; then
-    info "Keeping existing $PREFIX/.env (won't regenerate password)."
+    info "Keeping existing $PREFIX/.env (password preserved), refreshing endpoint keys."
+    env_upsert LOCAL_RPC_URL  "$LOCAL_RPC_URL"
+    env_upsert PUBLIC_RPC_URL "$PUBLIC_RPC_URL"
     return
   fi
   local pass
@@ -1218,6 +1277,43 @@ do_uninstall() {
         _ufw_attempts=$(( _ufw_attempts + 1 ))
       done
       ok "UFW rules removed."
+    fi
+  fi
+
+  # Node-side leftovers. --uninstall used to remove only the containers, the compose project
+  # and the ufw rules, silently leaving behind everything installed ON the host: the
+  # prometheus-node-exporter package with our systemd override (whose `Environment=` replaces
+  # the distro ARGS from /etc/default/), and the hostmetrics block written into the otelcol
+  # config. An operator who "uninstalled" still had a listening exporter and a modified
+  # collector config.
+  if systemctl list-unit-files 2>/dev/null | grep -q '^prometheus-node-exporter'; then
+    if confirm "Also remove the host prometheus-node-exporter and our systemd override?"; then
+      local ne_override=/etc/systemd/system/prometheus-node-exporter.service.d/override.conf
+      if [[ -f "$ne_override" ]]; then
+        rm -f "$ne_override"
+        rmdir --ignore-fail-on-non-empty "$(dirname "$ne_override")" 2>/dev/null || true
+        systemctl daemon-reload
+        ok "Removed $ne_override (distro defaults restored)."
+      fi
+      systemctl restart prometheus-node-exporter 2>/dev/null || true
+      ok "prometheus-node-exporter restored to distro configuration (package kept)."
+    fi
+  fi
+
+  local otel_cfg=""
+  for c in /etc/otelcol-contrib/config.yaml /etc/otelcol/config.yaml; do
+    [[ -f "$c" ]] && grep -qE '^\s+hostmetrics\s*:' "$c" 2>/dev/null && { otel_cfg="$c"; break; }
+  done
+  if [[ -n "$otel_cfg" ]]; then
+    local newest_bak
+    newest_bak=$(ls -t "${otel_cfg}".bak.* 2>/dev/null | head -1)
+    if [[ -n "$newest_bak" ]] && confirm "Restore $otel_cfg from $newest_bak (removes the hostmetrics overlay)?"; then
+      cp -a "$newest_bak" "$otel_cfg"
+      local svc; svc=$([[ "$otel_cfg" == *otelcol-contrib* ]] && echo otelcol-contrib || echo otelcol)
+      systemctl restart "$svc" 2>/dev/null || true
+      ok "Restored $otel_cfg and restarted $svc."
+    elif [[ -z "$newest_bak" ]]; then
+      warn "hostmetrics overlay present in $otel_cfg but no .bak.* to restore — remove it manually."
     fi
   fi
 
