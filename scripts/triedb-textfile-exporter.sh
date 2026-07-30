@@ -7,18 +7,25 @@
 # because no metric described it. The only source of truth is `monad-mpt --storage`, which is a
 # host binary and cannot be run from inside the exporter container.
 #
-# Install (see install.sh / docs): drop this script on the host, point node-exporter at
+# Install (see install.sh): drop this script on the host, point node-exporter at
 #   --collector.textfile.directory=/host/var/lib/node_exporter/textfile
 # and run it from a systemd timer every minute.
 #
-# Read-only: only ever invokes `monad-mpt --storage <dev>` without mutating flags.
+# Read-only by construction: `monad-mpt` is invoked exactly once, as
+#   timeout -k 5 30 monad-mpt --storage "$TRIEDB_DEV"
+# with no eval, no string-built command and every expansion quoted, so no destructive flag can
+# be reached through TRIEDB_DEV or OUT_DIR. Verified by strace: the device is opened O_RDONLY
+# only, with no flock and no writes.
 set -u
 
 TRIEDB_DEV="${TRIEDB_DEV:-/dev/triedb}"
 OUT_DIR="${OUT_DIR:-/var/lib/node_exporter/textfile}"
 OUT="${OUT_DIR}/monad_triedb.prom"
+PROBE_TIMEOUT="${PROBE_TIMEOUT:-30}"
 
-mkdir -p "$OUT_DIR"
+mkdir -p "$OUT_DIR" || exit 1
+# NOTE the suffix: the temp name must NOT end in .prom, or the collector's *.prom glob would
+# pick up a half-written file.
 TMP=$(mktemp "${OUT}.XXXXXX") || exit 1
 trap 'rm -f "$TMP"' EXIT
 
@@ -35,8 +42,10 @@ emit_header() {
 EOF
 }
 
-# "1.75 Tb" / "290.99 Gb" / "512.00 Mb" -> bytes. monad-mpt prints binary multiples with these
-# labels, so scale by 1024 (checked against the device's real size).
+# "1.75 Tb" / "290.99 Gb" / "0.00 bytes" -> bytes. monad-mpt prints BINARY multiples under these
+# labels (checked against blockdev --getsize64), and switches to a plain "bytes" unit for small
+# values — a fresh database right after a hard reset prints "0.00 bytes", which the unit pattern
+# must accept or the whole probe is reported as broken exactly while the disk grows fastest.
 to_bytes() {
   awk -v v="$1" -v u="$2" 'BEGIN {
     m = 1
@@ -48,43 +57,66 @@ to_bytes() {
   }'
 }
 
+finish() {   # $1 = 0|1 probe_ok
+  printf 'monad_triedb_probe_ok %s\n' "$1" >>"$TMP"
+  # Refuse to publish a truncated file (ENOSPC on /): a file missing probe_ok would make the
+  # "probe failing" rule silently unable to fire.
+  if [[ ! -s "$TMP" ]] || ! grep -q '^monad_triedb_probe_ok ' "$TMP"; then
+    rm -f "$TMP"; trap - EXIT; exit 1
+  fi
+  chmod 0644 "$TMP"    # node_exporter reads this from its container; mktemp gives 0600
+  mv -f "$TMP" "$OUT"
+  trap - EXIT
+  exit 0
+}
+
 emit_header
 
 if ! command -v monad-mpt >/dev/null 2>&1 || [[ ! -e "$TRIEDB_DEV" ]]; then
   # No device or no tool: publish probe_ok=0 and NOTHING else. Absence of the capacity series
   # is the honest signal — a zero would read as "empty disk".
-  printf 'monad_triedb_probe_ok 0\n' >>"$TMP"
-  chmod 0644 "$TMP"; mv -f "$TMP" "$OUT"; trap - EXIT; exit 0
+  finish 0
 fi
 
-out=$(timeout 30 monad-mpt --storage "$TRIEDB_DEV" 2>/dev/null)
+# stderr is kept (not sent to /dev/null): when monad-mpt aborts it prints a stacktrace, and
+# throwing that away leaves nothing in the journal to diagnose with.
+out=$(timeout -k 5 "$PROBE_TIMEOUT" monad-mpt --storage "$TRIEDB_DEV" 2>&1)
 rc=$?
+(( rc != 0 )) && printf '%s\n' "$out" >&2
 
-# The capacity line looks like:
+# Capacity lines look like:
 #        1.75 Tb      290.99 Gb 16.27%  "/dev/nvme1n1p1"
-line=$(grep -E '^[[:space:]]*[0-9.]+[[:space:]]+[KMGT]b[[:space:]]+[0-9.]+[[:space:]]+[KMGT]b[[:space:]]+[0-9.]+%' <<<"$out" | head -1)
+# The header says "MPT database on storageS" — there can be more than one. Iterate over all of
+# them: taking only the first silently dropped a second device, so filling it to 100% would be
+# invisible while the dashboard showed the first one comfortably green.
+mapfile -t lines < <(grep -E '^[[:space:]]*[0-9.]+[[:space:]]+([KMGT]b|bytes)[[:space:]]+[0-9.]+[[:space:]]+([KMGT]b|bytes)[[:space:]]+[0-9.]+%' <<<"$out")
 
-if (( rc != 0 )) || [[ -z "$line" ]]; then
-  printf 'monad_triedb_probe_ok 0\n' >>"$TMP"
-  chmod 0644 "$TMP"; mv -f "$TMP" "$OUT"; trap - EXIT; exit 0
+if (( rc != 0 )) || (( ${#lines[@]} == 0 )); then
+  finish 0
 fi
 
-cap_v=$(awk '{print $1}' <<<"$line"); cap_u=$(awk '{print $2}' <<<"$line")
-use_v=$(awk '{print $3}' <<<"$line"); use_u=$(awk '{print $4}' <<<"$line")
-pct=$(awk '{print $5}' <<<"$line" | tr -d '%')
-dev=$(grep -oE '"/dev/[^"]+"' <<<"$line" | tr -d '"')
+for line in "${lines[@]}"; do
+  cap_v=$(awk '{print $1}' <<<"$line"); cap_u=$(awk '{print $2}' <<<"$line")
+  use_v=$(awk '{print $3}' <<<"$line"); use_u=$(awk '{print $4}' <<<"$line")
+  pct=$(awk '{print $5}' <<<"$line" | tr -d '%')
+  dev=$(grep -oE '"/dev/[^"]+"' <<<"$line" | tr -d '"')
+  dev="${dev:-$TRIEDB_DEV}"
 
-cap_b=$(to_bytes "$cap_v" "$cap_u")
-use_b=$(to_bytes "$use_v" "$use_u")
-ratio=$(awk -v p="$pct" 'BEGIN {printf "%.4f", p/100}')
+  cap_b=$(to_bytes "$cap_v" "$cap_u")
+  # monad-mpt rounds capacity to two decimals (1.75 Tb overstates a 1 920 382 009 344-byte
+  # device by ~3.5 GiB). Prefer the exact size from the kernel when the path is a block device.
+  if [[ -b "$dev" ]]; then
+    exact=$(blockdev --getsize64 "$dev" 2>/dev/null || true)
+    [[ "$exact" =~ ^[0-9]+$ ]] && cap_b="$exact"
+  fi
+  use_b=$(to_bytes "$use_v" "$use_u")
+  ratio=$(awk -v p="$pct" 'BEGIN {printf "%.4f", p/100}')
 
-{
-  printf 'monad_triedb_capacity_bytes{device="%s"} %s\n' "${dev:-$TRIEDB_DEV}" "$cap_b"
-  printf 'monad_triedb_used_bytes{device="%s"} %s\n'     "${dev:-$TRIEDB_DEV}" "$use_b"
-  printf 'monad_triedb_used_ratio{device="%s"} %s\n'     "${dev:-$TRIEDB_DEV}" "$ratio"
-  printf 'monad_triedb_probe_ok 1\n'
-} >>"$TMP"
+  {
+    printf 'monad_triedb_capacity_bytes{device="%s"} %s\n' "$dev" "$cap_b"
+    printf 'monad_triedb_used_bytes{device="%s"} %s\n'     "$dev" "$use_b"
+    printf 'monad_triedb_used_ratio{device="%s"} %s\n'     "$dev" "$ratio"
+  } >>"$TMP"
+done
 
-chmod 0644 "$TMP"   # node_exporter reads this from inside its container; mktemp gives 0600
-mv -f "$TMP" "$OUT"
-trap - EXIT
+finish 1

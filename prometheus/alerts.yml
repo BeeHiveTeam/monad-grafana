@@ -218,7 +218,7 @@ groups:
             Neither df nor node_filesystem_* can see it — this is the only signal.
 
       - alert: MonadTriedbFillingUp
-        expr: predict_linear(monad_triedb_used_bytes[12h], 48*3600) > on(device) monad_triedb_capacity_bytes
+        expr: predict_linear(monad_triedb_used_bytes[12h], 48*3600) > on(device, instance) monad_triedb_capacity_bytes
         for: 1h
         labels:
           severity: warning
@@ -227,6 +227,25 @@ groups:
           description: >-
             Linear projection over the last 12h. TrieDB growth is steady, so this fires
             long before the hard threshold and leaves time to resize or prune.
+
+      # A stale .prom file is indistinguishable from a fresh one: the textfile collector serves
+      # its contents on every scrape, so if the script stops RUNNING (timer disabled, unit lost
+      # in an OS upgrade, mktemp failing on a full root filesystem before the trap is even set)
+      # Prometheus keeps seeing probe_ok=1 and a frozen percentage — and none of the three rules
+      # here can ever fire. probe_ok alone therefore cannot detect the failure it exists for.
+      - alert: MonadTriedbMetricsStale
+        expr: >-
+          absent(monad_triedb_probe_ok)
+          or (time() - node_textfile_mtime_seconds{file=~".*monad_triedb\\.prom"} > 600)
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "TrieDB metrics are stale or missing"
+          description: >-
+            The textfile has not been rewritten for over 10 minutes (the timer runs every
+            minute), or the metric is gone entirely. TrieDB fullness is unmonitored — the value
+            you see may be frozen. Check: systemctl status monad-triedb-exporter.timer
 
       - alert: MonadTriedbProbeFailing
         expr: monad_triedb_probe_ok == 0

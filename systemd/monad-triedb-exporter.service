@@ -6,6 +6,19 @@ After=monad-execution.service
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/monad-triedb-textfile-exporter
-# Read-only by construction: only runs `monad-mpt --storage` without mutating flags.
+# monad-mpt prints "Attempting async signal unsafe human readable stacktrace (this may hang)"
+# when it aborts, so a plain SIGTERM may not be enough; the script uses `timeout -k`, and the
+# unit caps the whole run so a wedged probe cannot leave the timer stuck in activating.
+TimeoutStartSec=45
 Nice=10
 IOSchedulingClass=idle
+# Read-only probe running as root: give it nothing it does not need.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/node_exporter/textfile
+ProtectHome=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes

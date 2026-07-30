@@ -1305,6 +1305,11 @@ do_upgrade() {
   # range and silently killed scraping. setup_ufw is idempotent and now also removes rules for
   # subnets that no longer exist.
   setup_ufw
+  # --upgrade added the textfile collector flag to node-exporter but never installed the script
+  # or the timer, so an upgraded host got a collector pointed at a directory that does not
+  # exist, no metrics, and alerts silent "by absence". install_triedb_exporter is idempotent and
+  # exits by itself when monad-mpt is absent.
+  install_triedb_exporter
   ok "Upgraded."
   verify || true
 }
@@ -1375,6 +1380,20 @@ do_uninstall() {
       ok "Restored $otel_cfg and restarted $svc."
     elif [[ -z "$newest_bak" ]]; then
       warn "hostmetrics overlay present in $otel_cfg but no .bak.* to restore — remove it manually."
+    fi
+  fi
+
+  # The TrieDB exporter is installed outside $PREFIX, so removing the stack left an enabled
+  # root timer polling monad-mpt on the live device every minute, forever.
+  if systemctl list-unit-files 2>/dev/null | grep -q '^monad-triedb-exporter'; then
+    if confirm "Also remove the TrieDB textfile exporter (timer, units, script)?"; then
+      systemctl disable --now monad-triedb-exporter.timer >> "$LOG_FILE" 2>&1 || true
+      rm -f /etc/systemd/system/monad-triedb-exporter.timer \
+            /etc/systemd/system/monad-triedb-exporter.service \
+            /usr/local/bin/monad-triedb-textfile-exporter \
+            /var/lib/node_exporter/textfile/monad_triedb.prom
+      systemctl daemon-reload
+      ok "TrieDB exporter removed."
     fi
   fi
 
