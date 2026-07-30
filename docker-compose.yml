@@ -76,6 +76,9 @@ services:
     command:
       # Mount host root readonly; rootfs flag tells the collector where to read.
       - --path.rootfs=/host
+      # --collector.systemd needs the systemd private socket; without it the collector
+      # silently exports nothing (count(node_systemd_unit_state) is empty on this host).
+      # Either mount the socket read-only, as done below, or drop the flag.
       - --collector.systemd
       # Reduce noise: ignore cgroup-internal mounts / virtual filesystems.
       - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
@@ -92,6 +95,7 @@ services:
       # from the public internet while remaining scrape-able from Prometheus.
       - --web.listen-address=0.0.0.0:9100
     volumes:
+      - /run/systemd:/run/systemd:ro
       - /:/host:ro,rslave
     mem_limit: 64m
     cpus: 0.1
@@ -129,6 +133,14 @@ services:
 networks:
   monitoring:
     driver: bridge
+    # Pin the subnet. install.sh writes ufw rules for whatever subnet docker happened to
+    # allocate at install time; docker re-allocates it whenever the network is recreated
+    # (`compose down && up`, daemon restart, another project taking 172.18/16), after which the
+    # scrape targets go DOWN and `install.sh --upgrade` never refreshes the rules. Fixing the
+    # subnet makes the firewall rule stable. Change it if 172.31.240.0/24 collides on your host.
+    ipam:
+      config:
+        - subnet: 172.31.240.0/24
 
 volumes:
   prometheus-data:
