@@ -622,8 +622,9 @@ detect_monad_network() {
   # Probe local Monad RPC for chain_id. Known Monad chain IDs:
   #   testnet = 10143 (0x279f)
   #   mainnet = 143   (0x8f)
-  # On any failure (no RPC, wrong chain, parse error) fall back to "testnet"
-  # — the safer default for a fresh install that hasn't been pointed at mainnet.
+  # On any failure (no RPC, wrong chain, parse error) this returns EMPTY and the caller
+  # refuses to guess — see configure_prometheus. Falling back to "testnet" was the old
+  # behaviour and it silently mislabelled mainnet nodes.
   #
   # LOCAL_RPC_URL default is http://host.docker.internal:8080 — that hostname
   # only resolves INSIDE the docker network, not on the host where install.sh
@@ -679,7 +680,7 @@ configure_prometheus() {
     # result was a dashboard labelled network=testnet pointing at the testnet public RPC, with
     # monad_sync_gap_blocks permanently meaningless — i.e. no lag monitoring at all, announced
     # by a single warn line that scrolls past.
-    warn "Could not detect Monad network (eth_chainId against ${probe_hint:-local RPC} failed)."
+    warn "Could not detect Monad network (eth_chainId against ${LOCAL_RPC_URL:-local RPC} failed)."
     if (( ${NON_INTERACTIVE:-0} )); then
       fatal "Refusing to guess the network in non-interactive mode. Re-run with NETWORK=testnet or NETWORK=mainnet."
     fi
