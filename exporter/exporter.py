@@ -33,11 +33,37 @@ state = {
 # Список сервисов держим в одном месте: и опрос /proc, и экспозиция monad_service_up
 # должны знать ПОЛНЫЙ набор, иначе упавший сервис просто исчезает из выдачи вместо того,
 # чтобы показать 0.
-SERVICE_COMMS = [
+# monad-rpc is OPTIONAL: install.sh explicitly allows a node without it ("validator-only setups
+# may not run monad-rpc"). Hardcoding it here published monad_service_up{service="monad-rpc"}=0
+# forever on such a node, which pinned MonadServiceDown critical — and, with no RPC to poll,
+# MonadLocalRpcDown and MonadExporterNoData as well. Three permanently firing criticals is how
+# an operator learns to ignore the alert channel.
+# Report only the units that actually exist on this host; MONAD_SERVICES overrides.
+_ALL_SERVICE_COMMS = [
     ('monad-bft', 'monad-node'),
     ('monad-execution', 'monad'),
     ('monad-rpc', 'monad-rpc'),
 ]
+
+def _unit_exists(name):
+    """Есть ли такой systemd-юнит на хосте (контейнер видит хост через pid: host и /host)."""
+    for root in ('/host/etc/systemd/system', '/host/lib/systemd/system',
+                 '/host/usr/lib/systemd/system', '/etc/systemd/system',
+                 '/lib/systemd/system', '/usr/lib/systemd/system'):
+        if os.path.exists(os.path.join(root, name + '.service')):
+            return True
+    return False
+
+_want = os.environ.get('MONAD_SERVICES', '').strip()
+if _want:
+    _wanted = {x.strip() for x in _want.split(',') if x.strip()}
+    SERVICE_COMMS = [(s, c) for s, c in _ALL_SERVICE_COMMS if s in _wanted]
+else:
+    SERVICE_COMMS = [(s, c) for s, c in _ALL_SERVICE_COMMS if _unit_exists(s)]
+    # If we cannot see any unit files at all (no /host mount), fall back to the full list
+    # rather than silently reporting nothing.
+    if not SERVICE_COMMS:
+        SERVICE_COMMS = list(_ALL_SERVICE_COMMS)
 SERVICES = [s for s, _ in SERVICE_COMMS]
 
 def _rpc(url, method, params=None):

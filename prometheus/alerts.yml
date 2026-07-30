@@ -44,9 +44,14 @@ groups:
       # Below ~3 a full-node risks the "local timeout deadlock" (stops receiving
       # proposals, freezes, can't self-recover). This is the FUNCTIONAL signal —
       # more reliable than raw session count, which bursts/prunes around restarts.
+      # Retuned 2026-07-30. 7 days of live data: min 1 · p05 2 · p50 3 · avg 2.92 · max 5.
+      # The old threshold of 3 sat exactly on the MEDIAN — half the time the value is at or
+      # below it. It happened not to fire here only because `for: 15m` absorbed the dips
+      # (0 firing windows in 7 days), but a node that dips slightly longer would page
+      # constantly. 2 is below p05 and still catches a genuine collapse to 0-1.
       - alert: MonadUpstreamValidatorsLow
-        expr: monad_peer_disc_num_upstream_validators < 3
-        for: 15m
+        expr: monad_peer_disc_num_upstream_validators < 2
+        for: 30m
         labels:
           severity: warning
         annotations:
@@ -62,8 +67,16 @@ groups:
       # 0.14.5 (~28-42) but above the degraded ~7-10 seen before a recovery
       # restart, so it fires on a real collapse, not on the normal level.
       # 30m for: avoids the legitimate post-restart prune from the burst peak.
+      # Retuned 2026-07-30 against 7 days of live data on 0.15.2 (the old threshold was set
+      # for the 0.14.5 working range and predates the release):
+      #   min 7 · p01 8 · p05 9 · p10 16 · p50 32 · avg 63 · max 695
+      # Firing 30-minute windows in those 7 days on a healthy node:
+      #   <15 → 35   <10 → 21   <8 → 2   <6 → 0
+      # 35 pages a week teaches the operator to ignore the channel, which is exactly how the
+      # real outage gets missed. 8 sits below p01 and still leaves headroom above the
+      # MonadPeerSessionsCollapsed critical at 5.
       - alert: MonadPeerSessionsDecayed
-        expr: monad_wireauth_udp_state_transport_sessions < 15
+        expr: monad_wireauth_udp_state_transport_sessions < 8
         for: 30m
         labels:
           severity: warning
@@ -97,8 +110,12 @@ groups:
 
       # Absent, not zero: the exporter deliberately stops publishing block/gap
       # series when it has no data, so absence is the signal.
+      # Same gate: with no monad-rpc there is no block data to publish, and the absence is
+      # expected rather than a fault.
       - alert: MonadExporterNoData
-        expr: absent(monad_last_block_age_seconds) or absent(monad_rpc_local_up)
+        expr: >-
+          (absent(monad_last_block_age_seconds) or absent(monad_rpc_local_up))
+          and on() (count(monad_service_up{service="monad-rpc"}) > 0)
         for: 5m
         labels:
           severity: critical
@@ -110,8 +127,12 @@ groups:
             NOT "everything is fine" — the metric is withheld precisely because the value
             is unknown.
 
+      # Gated on the monad-rpc unit actually existing. install.sh allows a validator without
+      # monad-rpc; on such a node the exporter can never reach a local RPC, so this rule pinned
+      # a critical forever. The exporter only publishes monad_service_up for units present on
+      # the host, so the join disappears together with the service.
       - alert: MonadLocalRpcDown
-        expr: monad_rpc_local_up == 0
+        expr: monad_rpc_local_up == 0 and on() (count(monad_service_up{service="monad-rpc"}) > 0)
         for: 3m
         labels:
           severity: critical
