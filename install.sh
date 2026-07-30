@@ -939,6 +939,38 @@ do_install() {
   esac
 }
 
+# TrieDB fullness has no other source. /dev/triedb is a raw device with no filesystem, so
+# node_exporter's filesystem collector cannot see it and every NodeDisk* rule (which filters on
+# fstype) excludes it by construction — the node's primary data device could fill up silently.
+# monad-mpt is a HOST binary and cannot run inside the exporter container, hence a textfile
+# collector fed by a systemd timer.
+install_triedb_exporter() {
+  if ! command -v monad-mpt >/dev/null 2>&1; then
+    info "monad-mpt not found — skipping TrieDB exporter (monitor-only host?)"
+    return 0
+  fi
+  local src="$PREFIX/scripts/triedb-textfile-exporter.sh"
+  local dst=/usr/local/bin/monad-triedb-textfile-exporter
+  [[ -f "$src" ]] || { warn "$src missing — skipping TrieDB exporter"; return 0; }
+  if (( DRY_RUN )); then
+    echo "  ${C_DIM}[dry-run] install $src → $dst + systemd timer${C_RESET}"
+    return 0
+  fi
+  install -m 0755 "$src" "$dst"
+  mkdir -p /var/lib/node_exporter/textfile
+  install -m 0644 "$PREFIX/systemd/monad-triedb-exporter.service" /etc/systemd/system/
+  install -m 0644 "$PREFIX/systemd/monad-triedb-exporter.timer"   /etc/systemd/system/
+  systemctl daemon-reload
+  systemctl enable --now monad-triedb-exporter.timer >> "$LOG_FILE" 2>&1
+  # Run once now so the metric exists immediately rather than at the next tick.
+  systemctl start monad-triedb-exporter.service >> "$LOG_FILE" 2>&1 || true
+  if [[ -s /var/lib/node_exporter/textfile/monad_triedb.prom ]]; then
+    ok "TrieDB exporter installed (timer every 1m)"
+  else
+    warn "TrieDB exporter installed but produced no output yet — check: systemctl status monad-triedb-exporter.service"
+  fi
+}
+
 do_install_all_in_one() {
   check_os
   check_disk
@@ -958,6 +990,7 @@ do_install_all_in_one() {
   generate_env
   start_stack
   setup_ufw
+  install_triedb_exporter
   verify || warn "Verification incomplete — check Grafana manually after a minute."
   print_access
 }
@@ -1110,6 +1143,10 @@ do_install_node_side() {
   require_firewall_or_optout
 
   install_node_exporter_systemd
+  # The node side is where /dev/triedb actually lives, so the TrieDB textfile exporter
+  # belongs here too — otherwise a split deployment monitors everything except the one
+  # device that can stop the node.
+  install_triedb_exporter
   configure_ufw_for_monitor "$MONITOR_IP"
   selftest_node_side
   print_node_side_done
@@ -1170,7 +1207,7 @@ install_node_exporter_systemd() {
   cat > "$override_dir/override.conf" <<EOF
 [Service]
 Environment=
-Environment="ARGS=--web.listen-address=0.0.0.0:9100"
+Environment="ARGS=--web.listen-address=0.0.0.0:9100 --collector.textfile.directory=/var/lib/node_exporter/textfile"
 EOF
   systemctl daemon-reload
   systemctl restart prometheus-node-exporter

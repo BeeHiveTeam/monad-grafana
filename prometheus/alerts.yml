@@ -175,3 +175,46 @@ groups:
         annotations:
           summary: "{{ $labels.mountpoint }} is over 90% full"
           description: "Free space below 10% for 15m."
+
+  # ---------------------------------------------------------------------------
+  # TrieDB. Added after the 2026-07 audit found the node's primary data device
+  # invisible to every disk alert: /dev/triedb is a RAW block device with no
+  # filesystem, so node_filesystem_* never covers it and the NodeDisk* rules
+  # above — which filter on fstype — exclude it by construction. Fed by
+  # scripts/triedb-textfile-exporter.sh via the node_exporter textfile collector.
+  # ---------------------------------------------------------------------------
+  - name: monad-triedb
+    rules:
+      - alert: MonadTriedbAlmostFull
+        expr: monad_triedb_used_ratio > 0.85
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "TrieDB {{ $labels.device }} is {{ $value | humanizePercentage }} full"
+          description: >-
+            The node writes state into this device; when it fills, execution stops.
+            Neither df nor node_filesystem_* can see it — this is the only signal.
+
+      - alert: MonadTriedbFillingUp
+        expr: predict_linear(monad_triedb_used_bytes[12h], 48*3600) > on(device) monad_triedb_capacity_bytes
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "TrieDB {{ $labels.device }} projected to fill within 48h"
+          description: >-
+            Linear projection over the last 12h. TrieDB growth is steady, so this fires
+            long before the hard threshold and leaves time to resize or prune.
+
+      - alert: MonadTriedbProbeFailing
+        expr: monad_triedb_probe_ok == 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "TrieDB capacity probe is failing"
+          description: >-
+            monad-mpt could not be read for 30m, so TrieDB fullness is unmonitored.
+            The exporter deliberately publishes no capacity series when it has no data —
+            do not read the missing metric as "empty".

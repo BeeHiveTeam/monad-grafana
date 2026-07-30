@@ -87,6 +87,9 @@ services:
       - --collector.netdev
       # Disk I/O — critical for TrieDB performance visibility.
       - --collector.diskstats
+      # TrieDB is a raw device with no filesystem, so the filesystem collector cannot see
+      # it at all. scripts/triedb-textfile-exporter.sh writes monad_triedb_* here.
+      - --collector.textfile.directory=/host/var/lib/node_exporter/textfile
       # Listen on 0.0.0.0:9100. With network_mode: host, this is the host's
       # network namespace — binding to 127.0.0.1 here would mean Prometheus
       # (which scrapes via docker-bridge → host-gateway IP, not loopback)

@@ -1,0 +1,11 @@
+[Unit]
+Description=Export TrieDB capacity to the node_exporter textfile collector
+Documentation=https://github.com/BeeHiveTeam/monad-grafana
+After=monad-execution.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/monad-triedb-textfile-exporter
+# Read-only by construction: only runs `monad-mpt --storage` without mutating flags.
+Nice=10
+IOSchedulingClass=idle
