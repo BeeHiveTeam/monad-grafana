@@ -74,3 +74,104 @@ groups:
             working set. Signal of a peering/session-management slide toward
             isolation; a monad-bft restart typically restores it. If it recurs,
             report it. Tune the threshold (15) to your node's observed baseline.
+
+  # ---------------------------------------------------------------------------
+  # Liveness. Added after the 2026-07 audit: the stack shipped five rules, all
+  # about peer sessions and otelcol, and NOT ONE about the simplest failure —
+  # "the node is not running". A crashed monad-bft, a dead local RPC, a stalled
+  # chain and a filling disk all produced zero alerts.
+  # ---------------------------------------------------------------------------
+  - name: monad-liveness
+    rules:
+      - alert: MonadServiceDown
+        expr: monad_service_up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Monad service {{ $labels.service }} is DOWN"
+          description: >-
+            monad_service_up{service="{{ $labels.service }}"}=0 for 2m. Check
+            `systemctl status {{ $labels.service }}` and
+            `journalctl -u {{ $labels.service }} -n 200`.
+
+      # Absent, not zero: the exporter deliberately stops publishing block/gap
+      # series when it has no data, so absence is the signal.
+      - alert: MonadExporterNoData
+        expr: absent(monad_last_block_age_seconds) or absent(monad_rpc_local_up)
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Monad exporter is publishing no block data"
+          description: >-
+            monad_last_block_age_seconds / monad_rpc_local_up missing for 5m. Either the
+            exporter cannot reach the node's RPC, or the exporter itself is broken. This is
+            NOT "everything is fine" — the metric is withheld precisely because the value
+            is unknown.
+
+      - alert: MonadLocalRpcDown
+        expr: monad_rpc_local_up == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Monad local RPC is not responding"
+          description: "eth_blockNumber against the local node has failed for 3m."
+
+      - alert: MonadBlockStalled
+        expr: monad_last_block_age_seconds > 60
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No new block for {{ $value }}s"
+          description: >-
+            Chain head has not advanced. At ~300ms block time anything beyond a
+            minute means consensus or execution is stuck.
+
+      - alert: MonadSyncGapGrowing
+        expr: monad_sync_gap_blocks > 2000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node is {{ $value }} blocks behind the network"
+          description: >-
+            Sync gap above 2000 blocks for 10m. Published only when local and public
+            RPC are confirmed to be the same chain.
+
+      - alert: MonadTargetDown
+        expr: up{job=~"node-exporter|monad-rpc-exporter"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus target {{ $labels.job }} is down"
+          description: >-
+            Scrape target unreachable for 5m — monitoring itself is partially blind.
+
+  - name: monad-host
+    rules:
+      - alert: NodeDiskFillingUp
+        expr: >-
+          predict_linear(node_filesystem_avail_bytes{fstype=~"ext4|xfs|btrfs|zfs"}[6h], 4*3600) < 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.mountpoint }} projected to fill within 4h"
+          description: >-
+            Linear projection over the last 6h has {{ $labels.mountpoint }} running out of
+            space within 4 hours. A full disk stops the node (and Prometheus TSDB).
+
+      - alert: NodeDiskAlmostFull
+        expr: >-
+          1 - (node_filesystem_avail_bytes{fstype=~"ext4|xfs|btrfs|zfs"}
+               / node_filesystem_size_bytes{fstype=~"ext4|xfs|btrfs|zfs"}) > 0.90
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.mountpoint }} is over 90% full"
+          description: "Free space below 10% for 15m."
