@@ -178,12 +178,12 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "\u26a0 NOT COMPLIANT",
+                  "text": "⚠ NOT COMPLIANT",
                   "color": "red",
                   "index": 0
                 },
                 "1": {
-                  "text": "\u2713 COMPLIANT",
+                  "text": "✓ COMPLIANT",
                   "color": "green",
                   "index": 1
                 }
@@ -593,7 +593,7 @@
         "y": 9
       },
       "id": 10,
-      "title": "Service uptime \u00b7 Peers",
+      "title": "Service uptime · Peers",
       "type": "row"
     },
     {
@@ -730,7 +730,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Live authenticated wireauth sessions (monad_wireauth_udp_state_transport_sessions) \u2014 peers we are ACTUALLY connected to. NOT the discovery routing table. Collapses to ~0 when the node loses connectivity, unlike 'Known (disc)'."
+      "description": "Live authenticated wireauth sessions (monad_wireauth_udp_state_transport_sessions) — peers we are ACTUALLY connected to. NOT the discovery routing table. Collapses to ~0 when the node loses connectivity, unlike 'Known (disc)'."
     },
     {
       "fieldConfig": {
@@ -1216,28 +1216,25 @@
       },
       "targets": [
         {
-          "expr": "node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes",
+          "refId": "A",
+          "expr": "node_memory_MemTotal_bytes - node_memory_MemFree_bytes - node_memory_Cached_bytes - node_memory_Buffers_bytes - node_memory_SReclaimable_bytes",
           "legendFormat": "used",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          }
+          "editorMode": "code",
+          "range": true
         },
         {
-          "expr": "node_memory_MemAvailable_bytes",
-          "legendFormat": "available",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          }
+          "refId": "B",
+          "expr": "node_memory_Cached_bytes + node_memory_Buffers_bytes + node_memory_SReclaimable_bytes",
+          "legendFormat": "cache+buffers",
+          "editorMode": "code",
+          "range": true
         },
         {
-          "expr": "node_memory_Cached_bytes + node_memory_Buffers_bytes",
-          "legendFormat": "cached+buffered",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          }
+          "refId": "C",
+          "expr": "node_memory_MemFree_bytes",
+          "legendFormat": "free",
+          "editorMode": "code",
+          "range": true
         }
       ],
       "title": "Memory",
@@ -1319,12 +1316,11 @@
       "id": 35,
       "targets": [
         {
-          "expr": "sum by (mode) (rate(node_cpu_seconds_total{mode!=\"idle\"}[1m]))",
-          "legendFormat": "{{state}}",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          }
+          "refId": "A",
+          "expr": "sum by (mode) (rate(node_cpu_seconds_total{mode!=\"idle\"}[1m])) / on() group_left count(count by (cpu) (node_cpu_seconds_total))",
+          "legendFormat": "{{mode}}",
+          "editorMode": "code",
+          "range": true
         }
       ],
       "title": "CPU usage by state over time",
@@ -1388,7 +1384,7 @@
         "y": 37
       },
       "id": 40,
-      "title": "Disk \u00b7 Filesystem",
+      "title": "Disk · Filesystem",
       "type": "row"
     },
     {
@@ -1406,12 +1402,18 @@
       "id": 41,
       "targets": [
         {
-          "expr": "rate(node_disk_read_bytes_total{device!~\"loop[0-9]*|sr[0-9]*|ram[0-9]*|dm-[0-9]*\"}[1m]) + rate(node_disk_written_bytes_total{device!~\"loop[0-9]*|sr[0-9]*|ram[0-9]*|dm-[0-9]*\"}[1m])",
-          "legendFormat": "{{device}} {{direction}}",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          }
+          "refId": "A",
+          "expr": "rate(node_disk_read_bytes_total{device!~\"loop[0-9]*|sr[0-9]*|ram[0-9]*|dm-[0-9]*\"}[1m])",
+          "legendFormat": "{{device}} read",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "rate(node_disk_written_bytes_total{device!~\"loop[0-9]*|sr[0-9]*|ram[0-9]*|dm-[0-9]*\"}[1m])",
+          "legendFormat": "{{device}} write",
+          "editorMode": "code",
+          "range": true
         }
       ],
       "title": "Disk IO bytes/sec",
@@ -1436,12 +1438,18 @@
       "id": 42,
       "targets": [
         {
-          "expr": "rate(node_disk_reads_completed_total{device!~\"loop[0-9]*|sr[0-9]*|ram[0-9]*|dm-[0-9]*\"}[1m]) + rate(node_disk_writes_completed_total{device!~\"loop[0-9]*|sr[0-9]*|ram[0-9]*|dm-[0-9]*\"}[1m])",
-          "legendFormat": "{{device}} {{direction}}",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          }
+          "refId": "A",
+          "expr": "rate(node_disk_reads_completed_total{device!~\"loop[0-9]*|sr[0-9]*|ram[0-9]*|dm-[0-9]*\"}[1m])",
+          "legendFormat": "{{device}} read",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "rate(node_disk_writes_completed_total{device!~\"loop[0-9]*|sr[0-9]*|ram[0-9]*|dm-[0-9]*\"}[1m])",
+          "legendFormat": "{{device}} write",
+          "editorMode": "code",
+          "range": true
         }
       ],
       "title": "Disk operations/sec",
@@ -1519,12 +1527,11 @@
       },
       "targets": [
         {
-          "expr": "1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes)",
+          "refId": "A",
+          "expr": "1 - (node_filesystem_avail_bytes{fstype=~\"ext4|xfs|btrfs|zfs\"} / clamp_min(node_filesystem_size_bytes{fstype=~\"ext4|xfs|btrfs|zfs\"}, 1))",
           "legendFormat": "{{mountpoint}}",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          }
+          "editorMode": "code",
+          "range": true
         }
       ],
       "title": "Filesystem usage % (used/total)",
@@ -1572,7 +1579,7 @@
         "y": 51
       },
       "id": 50,
-      "title": "TxPool \u00b7 Raptorcast",
+      "title": "TxPool · Raptorcast",
       "type": "row"
     },
     {
@@ -1768,68 +1775,81 @@
       "id": 57,
       "targets": [
         {
+          "refId": "A",
           "expr": "rate(monad_bft_txpool_pool_drop_pool_full[1m])",
           "legendFormat": "pool_full",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          }
+          "editorMode": "code",
+          "range": true
         },
         {
+          "refId": "B",
           "expr": "rate(monad_bft_txpool_pool_drop_fee_too_low[1m])",
           "legendFormat": "fee_too_low",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          }
+          "editorMode": "code",
+          "range": true
         },
         {
+          "refId": "C",
           "expr": "rate(monad_bft_txpool_pool_drop_nonce_too_low[1m])",
           "legendFormat": "nonce_too_low",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          }
+          "editorMode": "code",
+          "range": true
         },
         {
+          "refId": "D",
           "expr": "rate(monad_bft_txpool_pool_drop_invalid_signature[1m])",
           "legendFormat": "invalid_signature",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          }
+          "editorMode": "code",
+          "range": true
         },
         {
+          "refId": "E",
           "expr": "rate(monad_bft_txpool_pool_drop_insufficient_balance[1m])",
           "legendFormat": "insufficient_balance",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          }
+          "editorMode": "code",
+          "range": true
         },
         {
+          "refId": "F",
           "expr": "rate(monad_bft_txpool_pool_drop_not_well_formed[1m])",
           "legendFormat": "not_well_formed",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          }
+          "editorMode": "code",
+          "range": true
         },
         {
+          "refId": "G",
+          "expr": "rate(monad_bft_txpool_pool_drop_internal_state_read_error[1m])",
+          "legendFormat": "internal_state_read_error",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "refId": "H",
+          "expr": "rate(monad_bft_txpool_pool_drop_internal_not_ready[1m])",
+          "legendFormat": "internal_not_ready",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "refId": "I",
+          "expr": "rate(monad_bft_txpool_pool_drop_pool_not_ready[1m])",
+          "legendFormat": "pool_not_ready",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "refId": "J",
+          "expr": "rate(monad_bft_txpool_pool_drop_existing_higher_priority[1m])",
+          "legendFormat": "existing_higher_priority",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "refId": "K",
           "expr": "rate(monad_bft_txpool_pool_drop_replaced_by_higher_priority[1m])",
-          "legendFormat": "replaced",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          }
-        },
-        {
-          "expr": "rate(monad_bft_txpool_pool_drop_internal_state_backend_error[1m])",
-          "legendFormat": "internal_state_backend_error",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          }
+          "legendFormat": "replaced_by_higher_priority",
+          "editorMode": "code",
+          "range": true
         }
       ],
       "title": "TxPool drop reasons /sec",
@@ -1843,7 +1863,29 @@
       "fieldConfig": {
         "defaults": {
           "unit": "Bps"
-        }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "broadcast p99 ms"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ms"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "ms"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 7,
@@ -1871,7 +1913,7 @@
         },
         {
           "expr": "monad_bft_raptorcast_udp_secondary_broadcast_latency_p99_ms",
-          "legendFormat": "broadcast p99 ms (right)",
+          "legendFormat": "broadcast p99 ms",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -2177,47 +2219,35 @@
       "id": 64,
       "targets": [
         {
-          "expr": "monad_statesync_syncing",
-          "legendFormat": "syncing flag",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          }
+          "refId": "A",
+          "expr": "monad_statesync_progress_estimate",
+          "legendFormat": "progress estimate",
+          "editorMode": "code",
+          "range": true
         },
         {
-          "expr": "rate(monad_statesync_server_num_syncdone_failed[5m])",
-          "legendFormat": "syncdone failed /s",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          }
+          "refId": "B",
+          "expr": "monad_statesync_last_target",
+          "legendFormat": "last target",
+          "editorMode": "code",
+          "range": true
         },
         {
+          "refId": "C",
           "expr": "rate(monad_statesync_server_num_syncdone_success[5m])",
-          "legendFormat": "syncdone success /s",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          }
+          "legendFormat": "served syncdone ok /s",
+          "editorMode": "code",
+          "range": true
         },
         {
-          "expr": "rate(monad_state_blocktree_events_add_success[1m])",
-          "legendFormat": "blocktree add /s",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          }
-        },
-        {
-          "expr": "rate(monad_state_blocktree_events_prune_success[1m])",
-          "legendFormat": "blocktree prune /s",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          }
+          "refId": "D",
+          "expr": "rate(monad_statesync_server_num_syncdone_failed[5m])",
+          "legendFormat": "served syncdone fail /s",
+          "editorMode": "code",
+          "range": true
         }
       ],
-      "title": "Statesync \u00b7 Blocktree",
+      "title": "Statesync (own progress + served requests)",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -2239,20 +2269,32 @@
       "id": 65,
       "targets": [
         {
-          "expr": "rate(node_network_receive_drop_total{device!~\"lo|veth.*|docker.*|br-.*\"}[5m]) + rate(node_network_transmit_drop_total{device!~\"lo|veth.*|docker.*|br-.*\"}[5m])",
-          "legendFormat": "dropped {{direction}}",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          }
+          "refId": "A",
+          "expr": "rate(node_network_receive_drop_total{device!~\"lo|veth.*|docker.*|br-.*\"}[5m])",
+          "legendFormat": "{{device}} drop rx",
+          "editorMode": "code",
+          "range": true
         },
         {
-          "expr": "rate(node_network_receive_errs_total{device!~\"lo|veth.*|docker.*|br-.*\"}[5m]) + rate(node_network_transmit_errs_total{device!~\"lo|veth.*|docker.*|br-.*\"}[5m])",
-          "legendFormat": "errors {{direction}}",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          }
+          "refId": "B",
+          "expr": "rate(node_network_transmit_drop_total{device!~\"lo|veth.*|docker.*|br-.*\"}[5m])",
+          "legendFormat": "{{device}} drop tx",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "refId": "C",
+          "expr": "rate(node_network_receive_errs_total{device!~\"lo|veth.*|docker.*|br-.*\"}[5m])",
+          "legendFormat": "{{device}} err rx",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "refId": "D",
+          "expr": "rate(node_network_transmit_errs_total{device!~\"lo|veth.*|docker.*|br-.*\"}[5m])",
+          "legendFormat": "{{device}} err tx",
+          "editorMode": "code",
+          "range": true
         }
       ],
       "title": "Network errors",
@@ -2277,12 +2319,18 @@
       "id": 66,
       "targets": [
         {
-          "expr": "rate(node_network_receive_bytes_total{device!~\"lo|veth.*|docker.*|br-.*\"}[1m]) + rate(node_network_transmit_bytes_total{device!~\"lo|veth.*|docker.*|br-.*\"}[1m])",
-          "legendFormat": "{{direction}} Bps",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          }
+          "refId": "A",
+          "expr": "rate(node_network_receive_bytes_total{device!~\"lo|veth.*|docker.*|br-.*\"}[1m])",
+          "legendFormat": "{{device}} rx",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "rate(node_network_transmit_bytes_total{device!~\"lo|veth.*|docker.*|br-.*\"}[1m])",
+          "legendFormat": "{{device}} tx",
+          "editorMode": "code",
+          "range": true
         }
       ],
       "title": "Network throughput",
@@ -2529,7 +2577,7 @@
       "id": 72,
       "type": "stat",
       "title": "Known (disc)",
-      "description": "Peers known via discovery routing table (monad_peer_disc_num_peers). Does NOT mean connected \u2014 stays high even when sessions die. High here + low 'Active peers' = node isolated.",
+      "description": "Peers known via discovery routing table (monad_peer_disc_num_peers). Does NOT mean connected — stays high even when sessions die. High here + low 'Active peers' = node isolated.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2587,7 +2635,7 @@
     "to": "now"
   },
   "timezone": "browser",
-  "title": "Monad Node \u2014 Overview",
+  "title": "Monad Node — Overview",
   "uid": "cfkugnwjq8kjkb",
   "templating": {
     "list": [
