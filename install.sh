@@ -817,6 +817,25 @@ setup_ufw() {
     return
   fi
 
+  # Drop rules left over from a PREVIOUS subnet before adding the current one. Docker
+  # re-allocates the bridge subnet whenever the network is recreated (compose down/up, daemon
+  # restart, another project taking the range, or — as here — pinning it in compose), and the
+  # old allow rules keep pointing at a range nothing uses. The scrape targets then go DOWN with
+  # a firewall that looks correctly configured. Verified live: rules said 172.18.0.0/16 while
+  # the pinned network is 172.31.240.0/24.
+  local _stale _r
+  _stale=$(ufw status numbered 2>/dev/null \
+           | grep -E 'monad-grafana → (otelcol|monad-rpc|node-exporter)' \
+           | grep -vF "$subnet" | grep -oE '^\[[ ]*[0-9]+\]' | grep -oE '[0-9]+' | sort -rn)
+  if [[ -n "$_stale" ]]; then
+    info "Removing UFW rules for a previous docker subnet (current is $subnet)…"
+    # Delete highest index first: ufw renumbers after each delete.
+    for _r in $_stale; do
+      yes | ufw delete "$_r" >> "$LOG_FILE" 2>&1 || true
+    done
+    ok "Stale UFW rules removed."
+  fi
+
   info "Adding UFW allow rules: $subnet → :8889, :8080, :9100…"
   ufw allow from "$subnet" to any port 8889 proto tcp comment 'monad-grafana → otelcol' >> "$LOG_FILE" 2>&1 || true
   ufw allow from "$subnet" to any port 8080 proto tcp comment 'monad-grafana → monad-rpc' >> "$LOG_FILE" 2>&1 || true
@@ -1281,6 +1300,11 @@ do_upgrade() {
   # so we need to force-restart it to pick up our just-rewritten external_labels.
   info "Restarting prometheus to load updated external_labels…"
   (cd "$PREFIX" && docker compose restart prometheus) >> "$LOG_FILE" 2>&1
+  # --upgrade never touched the firewall, so an upgrade that changes the docker bridge subnet
+  # (e.g. the pinned subnet introduced in this repo) left every allow rule pointing at the old
+  # range and silently killed scraping. setup_ufw is idempotent and now also removes rules for
+  # subnets that no longer exist.
+  setup_ufw
   ok "Upgraded."
   verify || true
 }
