@@ -872,6 +872,34 @@ for t in json.load(sys.stdin)['data']['activeTargets']:
   fi
   ok "All $up_count Prometheus targets UP."
 
+  # Rules that fire into nothing are worse than no rules: the stack looks monitored. Prometheus
+  # here has no Alertmanager by design — delivery goes through monad-tg-bot, which polls
+  # /api/v1/alerts and forwards state transitions to Telegram. Say so out loud, because an
+  # operator installing only this repo would otherwise never learn that 17 loaded rules have no
+  # recipient.
+  local _rules _am
+  _rules=$(curl -fsS -m 3 "http://127.0.0.1:9090/api/v1/rules" 2>/dev/null \
+           | python3 -c 'import json,sys; d=json.load(sys.stdin); print(sum(len(g["rules"]) for g in d["data"]["groups"]))' 2>/dev/null || echo 0)
+  _am=$(curl -fsS -m 3 "http://127.0.0.1:9090/api/v1/alertmanagers" 2>/dev/null \
+        | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["data"]["activeAlertmanagers"]))' 2>/dev/null || echo 0)
+  if (( _am > 0 )); then
+    ok "Alert delivery: $_am Alertmanager(s) registered, $_rules rules loaded."
+  elif systemctl is-active --quiet monad-tg-bot 2>/dev/null \
+       && grep -qs 'prometheus_alerts' /opt/monad-tg-bot/bot.py; then
+    ok "Alert delivery: monad-tg-bot is running WITH the Prometheus bridge ($_rules rules)."
+  elif systemctl is-active --quiet monad-tg-bot 2>/dev/null; then
+    # The service being up is not the same as it forwarding: the bridge landed in a later
+    # release, and a host running an older bot.py answers /status happily while every
+    # Prometheus rule still goes nowhere.
+    warn "monad-tg-bot is running but its bot.py has no Prometheus bridge — $_rules rules still"
+    warn "  have no recipient. Update /opt/monad-tg-bot from github.com/BeeHiveTeam/monad-tg-bot."
+  else
+    warn "ALERTS HAVE NO RECIPIENT: $_rules rules are loaded, no Alertmanager is registered and"
+    warn "  monad-tg-bot is not running on this host. Every rule will sit in 'firing' inside"
+    warn "  Prometheus and nobody will be told. Either install monad-tg-bot (it polls"
+    warn "  /api/v1/alerts and pushes to Telegram) or add an Alertmanager to the stack."
+  fi
+
   local block
   block=$(curl -fsS 'http://127.0.0.1:9090/api/v1/query?query=monad_local_block_number' 2>/dev/null \
     | python3 -c "import json,sys;d=json.load(sys.stdin);r=d.get('data',{}).get('result',[]);print(r[0]['value'][1] if r else 0)" 2>/dev/null || echo 0)

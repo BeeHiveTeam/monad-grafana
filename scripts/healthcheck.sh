@@ -135,6 +135,24 @@ else
   check "block.age" "fail" "query failed (Prometheus unreachable?)"
 fi
 
+# 5b. Alert delivery. 17 loaded rules with no recipient is a stack that looks monitored and
+# is not: Prometheus keeps them in "firing" and nobody hears. There is no Alertmanager here by
+# design — monad-tg-bot polls /api/v1/alerts and forwards to Telegram.
+am=$(curl -fsS -m 3 "$PROM/api/v1/alertmanagers" 2>/dev/null \
+     | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["data"]["activeAlertmanagers"]))' 2>/dev/null || echo -1)
+if [[ "$am" -gt 0 ]]; then
+  check "alert.delivery" "ok" "$am alertmanager(s)"
+elif systemctl is-active --quiet monad-tg-bot 2>/dev/null \
+     && grep -qs 'prometheus_alerts' /opt/monad-tg-bot/bot.py; then
+  check "alert.delivery" "ok" "via monad-tg-bot"
+elif systemctl is-active --quiet monad-tg-bot 2>/dev/null; then
+  check "alert.delivery" "warn" "monad-tg-bot running but without the Prometheus bridge — update it"
+elif [[ "$am" -lt 0 ]]; then
+  check "alert.delivery" "fail" "query failed (Prometheus unreachable?)"
+else
+  check "alert.delivery" "fail" "no alertmanager and no monad-tg-bot — alerts go nowhere"
+fi
+
 # 6. Grafana healthy
 if curl -fsS -m 3 http://127.0.0.1:3000/api/health >/dev/null 2>&1; then
   check "grafana.health" "ok"
