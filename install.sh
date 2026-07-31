@@ -1150,6 +1150,9 @@ configure_prometheus_remote() {
   # Swap localhost docker DNS name for remote node IP
   sed -i "s|host.docker.internal|${NODE_HOST}|g" "$prom"
   ok "Prometheus targets pointed at remote node: ${NODE_HOST}"
+  # Persist so --upgrade knows this is a split monitor even if prometheus.yml is unreadable.
+  env_upsert DEPLOY_ROLE "split-monitor"
+  env_upsert NODE_HOST   "$NODE_HOST"
 
   # Network label
   local net="${NETWORK:-${MONAD_NETWORK_DETECTED:-}}"
@@ -1314,12 +1317,41 @@ do_enable_hostmetrics() {
 do_upgrade() {
   [[ -d "$PREFIX/.git" ]] || fatal "$PREFIX is not a git checkout — install first."
   info "Upgrading $PREFIX…"
+
+  # Capture the split-mode scrape target BEFORE clone_or_update's `git reset --hard` wipes it.
+  # This is read from the live file rather than from .env on purpose: deployments installed
+  # before DEPLOY_ROLE existed have no state file, and those are exactly the ones that have been
+  # silently losing their remote targets on every upgrade.
+  #
+  # Previously do_upgrade always called configure_prometheus (the all-in-one variant), so a
+  # split monitor came back pointed at host.docker.internal — i.e. scraping nothing, on a host
+  # where the Monad node isn't. Every target went down and stayed down until someone noticed.
+  local _prom="$PREFIX/prometheus/prometheus.yml"
+  local _prev_node_host=""
+  if [[ -f "$_prom" ]]; then
+    _prev_node_host=$(grep -oE "targets:[[:space:]]*\['?[^:']+:[0-9]+" "$_prom" 2>/dev/null \
+      | grep -oE "\['?[^:']+" | tr -d "['" | grep -vE '^(host\.docker\.internal|localhost|127\.0\.0\.1|prometheus|grafana|node-exporter|monad-rpc-exporter)$' \
+      | head -1 || true)
+  fi
+  local _role
+  _role=$(grep -E '^DEPLOY_ROLE=' "$PREFIX/.env" 2>/dev/null | cut -d= -f2- || true)
+  if [[ -z "$_prev_node_host" && "$_role" == "split-monitor" ]]; then
+    _prev_node_host=$(grep -E '^NODE_HOST=' "$PREFIX/.env" 2>/dev/null | cut -d= -f2- || true)
+  fi
+
   clone_or_update
   # clone_or_update does `git reset --hard origin/main` which wipes any
   # operator-side edits to prometheus.yml (host hostname, network label).
-  # Re-apply configure_prometheus so external_labels stay correct after
-  # every --upgrade.
-  configure_prometheus
+  # Re-apply the right variant so external_labels AND scrape targets survive.
+  if [[ -n "$_prev_node_host" ]]; then
+    NODE_HOST="$_prev_node_host"
+    info "Split deployment detected — restoring remote scrape target: $NODE_HOST"
+    configure_prometheus_remote
+    env_upsert DEPLOY_ROLE "split-monitor"
+    env_upsert NODE_HOST   "$NODE_HOST"
+  else
+    configure_prometheus
+  fi
   info "Pulling latest images…"
   (cd "$PREFIX" && docker compose pull) >> "$LOG_FILE" 2>&1
   info "Recreating containers…"
