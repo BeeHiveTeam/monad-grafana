@@ -287,3 +287,15 @@ groups:
           description: >-
             eth_chainId is failing against one of the two endpoints, so we cannot say whether
             the sync gap is meaningful. Not the same as "they match".
+
+      - alert: MonadMip8DualTimeline
+        expr: monad_triedb_migration_phase == 1
+        for: 6h
+        labels:
+          severity: warning
+        annotations:
+          summary: "MIP-8 dual-timeline migration has been running for 6h"
+          description: >-
+            Both storage encodings are live, so write amplification and TrieDB growth are
+            elevated by design. Phase A is expected to take minutes, not hours — if this
+            persists, check monad-execution logs before assuming the disk is simply filling.
