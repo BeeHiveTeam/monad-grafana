@@ -100,10 +100,18 @@ else
 fi
 
 # 4. Sync gap reasonable
+# NODATA as a word, not -1. A negative gap is a LEGITIMATE reading: the local node is ahead of
+# the public RPC used as the reference, which is the normal state for a well-connected node and
+# routinely happens by a block or two. Overloading -1 as "no data" reported a healthy node that
+# was slightly ahead as a hard failure.
 if gap=$(curl -fsS -m 3 "$PROM/api/v1/query?query=monad_sync_gap_blocks" 2>/dev/null \
-         | python3 -c "import json,sys;d=json.load(sys.stdin);r=d.get('data',{}).get('result',[]);print(int(float(r[0]['value'][1])) if r else -1)" 2>/dev/null); then
-  if (( gap < 0 )); then
-    check "sync.gap" "fail" "no data"
+         | python3 -c "import json,sys;d=json.load(sys.stdin);r=d.get('data',{}).get('result',[]);print(int(float(r[0]['value'][1])) if r else 'NODATA')" 2>/dev/null); then
+  if [[ "$gap" == "NODATA" ]]; then
+    check "sync.gap" "fail" "no data (metric absent from Prometheus)"
+  elif (( gap < -50 )); then
+    check "sync.gap" "warn" "$gap blocks — local node far AHEAD of the reference RPC (reference lagging?)"
+  elif (( gap < 0 )); then
+    check "sync.gap" "ok" "$gap blocks (ahead of the reference RPC — normal)"
   elif (( gap < 5 )); then
     check "sync.gap" "ok" "$gap blocks"
   elif (( gap < 50 )); then

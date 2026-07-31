@@ -374,15 +374,24 @@ check_ram() {
 
 check_ports() {
   local conflict=0
-  for p in 9090 3000 9101; do
+  # 9100 belongs here: node-exporter runs with network_mode: host, so it competes for the host's
+  # :9100 with any distro `prometheus-node-exporter` — which is a common thing to already have.
+  # Leaving it out meant the container lost the bind and the whole host-metrics half of the
+  # dashboard was empty, with the installer having reported clean ports.
+  for p in 9090 3000 9101 9100; do
     if ss -tln 2>/dev/null | grep -qE "127.0.0.1:${p}\b|0.0.0.0:${p}\b|\*:${p}\b"; then
       err "Port ${p} already in use:"
       ss -tlnp 2>/dev/null | grep ":${p}\b" >&2 || true
+      if [[ "$p" == "9100" ]]; then
+        err "  :9100 is usually a distro prometheus-node-exporter. Either stop it"
+        err "  (systemctl disable --now prometheus-node-exporter) or keep it and remove the"
+        err "  node-exporter service from docker-compose.yml — running both is not possible."
+      fi
       conflict=1
     fi
   done
   (( conflict == 0 )) || fatal "Free up the listed ports and re-run."
-  ok "Ports 9090/3000/9101 free."
+  ok "Ports 9090/3000/9101/9100 free."
 }
 
 check_monad() {
@@ -546,17 +555,22 @@ apply_hostmetrics() {
     return 1
   fi
 
-  # Pre-flight: confirm the active otelcol BINARY actually has the
-  # hostmetrics receiver compiled in. Plain `otelcol` (the Core
-  # distribution that docs.monad.xyz mandates for VDP push) does NOT
-  # ship hostmetrics — it's contrib-only. Writing the overlay against
-  # plain otelcol would produce a config that fails to load and crashes
-  # the collector on next restart.
+  # Pre-flight: confirm the active otelcol BINARY actually has the hostmetrics receiver
+  # compiled in, by asking it. Do NOT infer this from the distribution name: plain `otelcol`
+  # 0.139.0 — the Core build docs.monad.xyz mandates for VDP push — DOES list hostmetrics in
+  # `otelcol components`, and runs it (594 system_* series on our own node). The old prose here
+  # asserted the opposite and steered operators away from a receiver they already had.
+  # Probing is right either way; a build that genuinely lacks it would crash on restart.
   if command -v "$OTELCOL_SVC" >/dev/null 2>&1; then
-    if ! "$OTELCOL_SVC" components 2>/dev/null | grep -qE '^\s+- hostmetrics$|^\s+hostmetrics:|^hostmetrics$'; then
+    # The real output is `    - name: hostmetrics` under `receivers:`. The old pattern looked for
+    # `- hostmetrics`, which never matches — so the probe reported "receiver absent" on EVERY
+    # collector, the overlay was always skipped, and that false negative is what the docs then
+    # wrote down as fact. Accept the actual shape as well.
+    if ! "$OTELCOL_SVC" components 2>/dev/null \
+         | grep -qE '^[[:space:]]*-[[:space:]]*(name:[[:space:]]*)?hostmetrics[[:space:]]*$|^[[:space:]]*hostmetrics:'; then
       err "Active collector '$OTELCOL_SVC' does NOT include the hostmetrics receiver."
-      err "  hostmetrics is part of otelcol-contrib only — plain otelcol (Core,"
-      err "  which docs.monad.xyz requires for VDP push) does not ship it."
+      err "  (Checked with '$OTELCOL_SVC components'. Availability varies by build and"
+      err "  version — plain otelcol 0.139.0 does include it, older or trimmed builds may not.)"
       err "  Skipping overlay to avoid breaking the running collector."
       err ""
       err "  Recommended path: install node_exporter as a sidecar — host metrics"
@@ -1027,6 +1041,12 @@ do_install_all_in_one() {
   check_docker
   check_existing_stack
   check_ports
+  # node-exporter runs with network_mode: host and binds 0.0.0.0:9100 here exactly as it does
+  # on the split node side — it exports hostname, mounts, NICs, logged-in users and disk
+  # topology. The compose comment claimed setup_ufw keeps it off the public internet, but an
+  # ALLOW rule denies nothing when UFW is inactive: the guard existed only on the split path,
+  # so the default all-in-one install on a host without UFW published host metrics to the world.
+  require_firewall_or_optout
   echo
   clone_or_update
   configure_prometheus
@@ -1212,14 +1232,14 @@ require_firewall_or_optout() {
   fi
   if [[ "${ALLOW_UNFIREWALLED:-0}" == "1" ]]; then
     warn "UFW inactive but ALLOW_UNFIREWALLED=1 — proceeding. Ensure an external"
-    warn "firewall restricts :9100/:8889/:8080 to the monitor host ${MONITOR_IP}."
+    warn "firewall restricts :9100/:8889/:8080${MONITOR_IP:+ to the monitor host ${MONITOR_IP}}."
     return 0
   fi
   fatal "UFW is not active. node-exporter binds 0.0.0.0:9100 (exposes host metrics)
   and this step opens :8889/:8080 — leaving them world-reachable without a firewall.
   Enable UFW first:   sudo ufw --force enable
-  Or, if you run an external/cloud firewall that already restricts these ports to
-  ${MONITOR_IP}, re-run with:   ALLOW_UNFIREWALLED=1 sudo ./install.sh"
+  Or, if you run an external/cloud firewall that already restricts these ports${MONITOR_IP:+ to ${MONITOR_IP}},
+  re-run with:   ALLOW_UNFIREWALLED=1 sudo ./install.sh"
 }
 
 prompt_monitor_ip() {

@@ -258,3 +258,32 @@ groups:
             monad-mpt could not be read for 30m, so TrieDB fullness is unmonitored.
             The exporter deliberately publishes no capacity series when it has no data —
             do not read the missing metric as "empty".
+
+  - name: monad-consistency
+    rules:
+      # monad_rpc_network_mismatch was published by the exporter and consumed by nothing —
+      # no rule, no panel. A mismatch means the local node and the public reference RPC are on
+      # DIFFERENT chains, so monad_sync_gap_blocks is meaningless and the exporter suppresses
+      # it. Without this rule the gap simply vanishes from the dashboard with no explanation.
+      - alert: MonadRpcNetworkMismatch
+        expr: monad_rpc_network_mismatch == 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Local node and public reference RPC are on different chains"
+          description: >-
+            Sync-gap monitoring is suppressed while this holds. Check PUBLIC_RPC_URL in
+            {{ $labels.instance }}'s .env — a testnet node pointed at a mainnet RPC (or the
+            reverse) produces this.
+
+      - alert: MonadRpcNetworkUnknown
+        expr: monad_rpc_network_mismatch == -1
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Chain identity of local vs public RPC could not be determined for 30m"
+          description: >-
+            eth_chainId is failing against one of the two endpoints, so we cannot say whether
+            the sync gap is meaningful. Not the same as "they match".

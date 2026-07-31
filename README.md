@@ -37,11 +37,11 @@ Container logs are rotated (json-file driver, 10 MB × 3 files per service) — 
 
 ### Heads-up on host metrics — `node_exporter` vs `hostmetrics` overlay
 
-`docs.monad.xyz` mandates the **plain `otelcol`** distribution for VDP push. Plain otelcol is Core-only — it **does not** ship the `hostmetrics` receiver (that's `otelcol-contrib` territory).
+`docs.monad.xyz` mandates the **plain `otelcol`** distribution for VDP push. Whether that build carries the `hostmetrics` receiver depends on the version — plain `otelcol` 0.139.0 **does** (verified with `otelcol components`, and it is what feeds `system_*` on our own node). Older or trimmed builds may not, so the installer asks the binary rather than guessing from the distribution name. This section previously stated flatly that plain otelcol lacks the receiver, which steered operators away from something they had.
 
 To fill the host panels (CPU/RAM/disk/network) without breaking VDP push, this stack ships **`node_exporter`** as a 4th container (Prometheus-standard, no otelcol config edit). It runs in `network_mode: host` + `pid: host` so it sees real NICs and the real `/proc`, not container namespaces.
 
-If you actually run `otelcol-contrib`, the installer also offers a one-time `hostmetrics` overlay (with backup + auto-restore on restart failure). On plain `otelcol` it auto-detects the missing receiver and **skips the prompt** — no risk of breaking your collector. See [`docs/ENABLE_HOSTMETRICS.md`](docs/ENABLE_HOSTMETRICS.md) for the manual procedure.
+If your collector reports the `hostmetrics` receiver, the installer also offers a one-time `hostmetrics` overlay (with backup + auto-restore on restart failure). Where the receiver is genuinely absent it auto-detects that and **skips the prompt** — no risk of breaking your collector. See [`docs/ENABLE_HOSTMETRICS.md`](docs/ENABLE_HOSTMETRICS.md) for the manual procedure.
 
 ### Heads-up on VDP OTel push (May 2026 onward)
 

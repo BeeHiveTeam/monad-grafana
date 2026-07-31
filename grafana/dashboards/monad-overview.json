@@ -138,7 +138,7 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "/^network$/",
+          "fields": "/^exported_network$/",
           "values": false
         }
       },
@@ -149,11 +149,12 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "legendFormat": "{{network}}",
+          "legendFormat": "{{exported_network}}",
           "format": "table",
           "instant": true
         }
-      ]
+      ],
+      "description": "Network as reported by the NODE itself (exported_network, from the node's own OTel resource attributes). Previously this read the `network` label, which Prometheus attaches from prometheus.yml — so the panel echoed the installer's configuration back rather than checking it, and would have confirmed a mislabelled config as correct."
     },
     {
       "id": 77,
@@ -369,11 +370,11 @@
               },
               {
                 "color": "yellow",
-                "value": 3
+                "value": 12
               },
               {
                 "color": "orange",
-                "value": 10
+                "value": 20
               },
               {
                 "color": "red",
@@ -405,7 +406,8 @@
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
-      }
+      },
+      "description": "Age of the newest block seen by the exporter. The exporter polls every 10s, so this oscillates 0-10s on a perfectly healthy node — measured over 24h here: median 5s, p99 10s. The old yellow threshold of 3s was below the normal range, so the panel was amber 65% of the time and stopped meaning anything. Yellow now starts past the poll interval."
     },
     {
       "fieldConfig": {
@@ -1686,19 +1688,20 @@
       "id": 54,
       "targets": [
         {
-          "expr": "monad_bft_txpool_create_proposal_elapsed_ns / 1e6",
+          "expr": "rate(monad_bft_txpool_create_proposal_elapsed_ns[5m]) / clamp_min(rate(monad_bft_txpool_create_proposal[5m]), 1) / 1e6",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           }
         }
       ],
-      "title": "TxPool create_proposal latency p99",
+      "title": "TxPool create_proposal — mean latency",
       "type": "stat",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
-      }
+      },
+      "description": "MEAN, not p99 — the panel was titled p99 but plotted a cumulative sum of nanoseconds divided by 1e6, which is neither a percentile nor a latency. No _p99 series exists for this metric. Now: total elapsed per proposal over a 5m window, in milliseconds. Reads 0 on a full node, which proposes no blocks."
     },
     {
       "fieldConfig": {
