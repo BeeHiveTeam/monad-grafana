@@ -288,11 +288,13 @@ groups:
             eth_chainId is failing against one of the two endpoints, so we cannot say whether
             the sync gap is meaningful. Not the same as "they match".
 
-      # NOT a duration alert. Phase 1 is the STEADY STATE after Phase A completes: the node
-      # runs dual-timeline until the Phase B hardfork, which the Foundation has not scheduled.
-      # An earlier version of this rule fired after 6h in phase 1, which would have paged
-      # continuously on every node that finished Phase A — confirmed against a second node
-      # sitting in phase 1 by design. What actually matters is the disk, so alert on that.
+      # NOT a duration alert. Phase 1 is the STEADY STATE between Phase A and the fork: the
+      # node runs dual-timeline until MONAD_TEN activates, scheduled on testnet for
+      # 2026-08-12 14:30 UTC (timestamp 1786545000, see docs.monad.xyz/networks.json; mainnet
+      # is not scheduled). An earlier version of this rule fired after 6h in phase 1, which
+      # would have paged continuously on every node that finished Phase A — confirmed against
+      # a second node sitting in phase 1 by design. What actually matters is the disk, so
+      # alert on that.
       - alert: MonadMip8DualTimelineDiskPressure
         expr: monad_triedb_migration_phase == 1 and monad_triedb_used_ratio > 0.75
         for: 30m

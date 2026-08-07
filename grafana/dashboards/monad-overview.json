@@ -2625,6 +2625,248 @@
         "graphMode": "none",
         "textMode": "value"
       }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 97
+      },
+      "id": 78,
+      "panels": [],
+      "title": "TrieDB (raw device — invisible to df and node_exporter)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "id": 79,
+      "type": "gauge",
+      "title": "TrieDB fill",
+      "description": "TrieDB lives on a raw block device with no filesystem, so node_exporter and df cannot see it. Between MIP-8 Phase A and Phase C both encodings are written at once and this grows well beyond its steady-state size — watch headroom here, not on the / bar.",
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 98
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "monad_triedb_used_ratio",
+          "legendFormat": "{{device}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.75
+              },
+              {
+                "color": "red",
+                "value": 0.85
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "id": 80,
+      "type": "timeseries",
+      "title": "TrieDB used vs capacity",
+      "description": "Growth curve of the database itself. The step up when a page timeline is activated is expected; what matters is whether the curve still fits under capacity.",
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 6,
+        "y": 98
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "monad_triedb_used_bytes",
+          "legendFormat": "used {{device}}",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "monad_triedb_capacity_bytes",
+          "legendFormat": "capacity {{device}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 2
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "id": 81,
+      "type": "stat",
+      "title": "MIP-8 migration phase",
+      "description": "0 legacy/slot · 1 dual-timeline (Phase A done, awaiting the fork) · 2 page-encoded (Phase C done). Phase 1 is a steady state, not a migration in flight. On testnet MONAD_TEN activates 2026-08-12 14:30 UTC; a node still showing 0 will refuse to start on the release that carries the fork.",
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 18,
+        "y": 98
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "monad_triedb_migration_phase",
+          "legendFormat": "phase",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "0 · legacy/slot",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "1 · dual-timeline",
+                  "color": "blue",
+                  "index": 1
+                },
+                "2": {
+                  "text": "2 · page-encoded",
+                  "color": "green",
+                  "index": 2
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "id": 82,
+      "type": "stat",
+      "title": "TrieDB probe",
+      "description": "1 = the exporter read the device this cycle. 0 or missing means the numbers above are stale — absence of data is not the same as a healthy database.",
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 0,
+        "y": 104
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "monad_triedb_probe_ok",
+          "legendFormat": "probe",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "FAILED",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "ok",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
     }
   ],
   "refresh": "15s",
