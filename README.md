@@ -1,6 +1,6 @@
 # Monad Node — Grafana Stack
 
-Self-hosted Prometheus + Grafana for a [Monad](https://www.monad.xyz/) testnet/mainnet node, with a 49-panel dashboard covering sync status, vote delay, consensus events, host resources, disk I/O, network, txpool, raptorcast traffic, and 20+ error categories.
+Self-hosted Prometheus + Grafana for a [Monad](https://www.monad.xyz/) testnet/mainnet node, with a dashboard covering sync status, vote delay, consensus events, host resources, disk I/O, network, txpool, raptorcast traffic, and 20+ error categories.
 
 Built on top of the **OpenTelemetry collector that Monad already bundles** (`monad_*` metrics on `:8889`) plus a Prometheus-standard `node_exporter` for host metrics — no agents on the host beyond Docker containers.
 
@@ -20,7 +20,7 @@ Four Docker containers, ~160 MB RAM total, ~0.2% CPU:
 | **monad-rpc-exporter** | `127.0.0.1:9101` | Python sidecar (stdlib only) — polls JSON-RPC for block height + sync gap, reads `/proc` for service uptime. Runs as `nobody` (uid 65534). |
 | **node-exporter** | host `:9100` (UFW-restricted to bridge subnet) | Prometheus standard host metrics: CPU, memory, swap, load average, disk I/O, filesystem, network — fills the panels that `monad_*` metrics don't cover. |
 
-**Dashboard**: 49 visible panels across 8 sections — Sync · Service uptime / peers · Vote delay · Host resources · Disk · Network · TxPool / Raptorcast · Errors. **Datasource templated** (works with multiple Prometheus instances) and **no hardcoded device/interface names** (adapts to whatever NVMe/NIC names your host uses).
+**Dashboard**: 58 panels across 10 sections — Node info · Sync status · Service uptime / peers · Vote delay · System resources · Disk / filesystem · TxPool / Raptorcast · Errors / failures · VDP / MF push · TrieDB. **Datasource templated** (works with multiple Prometheus instances) and **no hardcoded device/interface names** (adapts to whatever NVMe/NIC names your host uses).
 
 Container logs are rotated (json-file driver, 10 MB × 3 files per service) — won't fill the disk. Each container has explicit `mem_limit` + `cpus` constraints so they can't starve the validator.
 
@@ -228,7 +228,7 @@ monad-grafana/
 │   │   ├── datasources/prometheus.yaml    # auto-load Prometheus as default datasource
 │   │   └── dashboards/monad.yaml          # auto-load dashboard on startup
 │   └── dashboards/
-│       └── monad-overview.json            # 49-panel dashboard, datasource-templated
+│       └── monad-overview.json            # dashboard, datasource-templated
 ├── exporter/
 │   └── exporter.py                        # Python sidecar (stdlib only, runs as nobody)
 ├── scripts/
@@ -240,7 +240,7 @@ monad-grafana/
 
 ---
 
-## What's inside the dashboard (49 panels)
+## What's inside the dashboard (58 panels)
 
 **Sync status** — Local block height · Public block height · Sync gap · Last block age · RPC up indicators · Block commit rate · Local timeouts/min
 
