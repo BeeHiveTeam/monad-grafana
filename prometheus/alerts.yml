@@ -306,3 +306,29 @@ groups:
             Both storage encodings are live, so the database is larger than it will be after
             the Phase B hardfork. That is expected — but headroom still has to be there when
             the migration finishes. Phase 1 on its own is normal and is not alerted.
+
+  - name: monad-consensus-health
+    rules:
+      # Derived from the node's own counters, so these signals do not exist for an
+      # observer outside a running client. Thresholds are PROVISIONAL: they have not
+      # been calibrated against a node inside the active set — see SIGNALS.md.
+      - alert: MonadConsensusTimeoutRoundsHigh
+        expr: monad_ch_tc_round_ratio > 0.05
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Rounds closing on timeout certificates ({{ $value | humanizePercentage }})"
+          description: >-
+            More than 5% of consensus rounds closed on a timeout certificate rather than a
+            quorum, sustained for 15 minutes. Provisional threshold.
+
+      - alert: MonadExecutionLaggingConsensus
+        expr: monad_ch_execution_lagging_rate > 0.10
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Execution trailing consensus ({{ $value | humanizePercentage }} of blocks)"
+          description: >-
+            The deferred-execution gap is widening. Provisional threshold.

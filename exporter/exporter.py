@@ -17,6 +17,14 @@ of monad-* processes on the host.
 import json, urllib.request, time, threading, os
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
+# Consensus-health signals are derived from the node's own counters, which only exist
+# inside a running client. Imported defensively: if the module is missing or broken the
+# exporter must keep serving the metrics it already had, not fail the whole scrape.
+try:
+    import consensus_health as _ch
+except Exception:  # pragma: no cover
+    _ch = None
+
 LOCAL_RPC_URL = os.environ.get('LOCAL_RPC_URL', 'http://host.docker.internal:8080')
 PUBLIC_RPC_URL = os.environ.get('PUBLIC_RPC_URL', 'https://testnet-rpc.monad.xyz')
 
@@ -44,6 +52,35 @@ _ALL_SERVICE_COMMS = [
     ('monad-execution', 'monad'),
     ('monad-rpc', 'monad-rpc'),
 ]
+
+# Node metrics endpoint the health signals are computed from, and the previous scrape
+# they are diffed against. CH_ENDPOINT keeps this configurable for split deployments.
+CH_ENDPOINT = os.getenv('CH_ENDPOINT', 'http://host.docker.internal:9143/metrics')
+_ch_prev = {'snap': None}
+
+
+def _consensus_health_lines():
+    """Render monad_ch_* for the current window, or nothing at all.
+
+    Returns '' on any failure — a health signal that cannot be computed must not
+    take the rest of the exporter down with it, and must not be published as a
+    healthy-looking zero either.
+    """
+    if _ch is None:
+        return ""
+    try:
+        cur = _ch.parse_exposition(
+            urllib.request.urlopen(CH_ENDPOINT, timeout=8).read().decode())
+    except Exception:
+        return ""
+    prev, _ch_prev['snap'] = _ch_prev['snap'], cur
+    if prev is None:
+        return ""          # first scrape: no window yet, so no signals
+    try:
+        return _ch.render_prometheus(_ch.compute_signals(prev, cur), cur.identity())
+    except Exception:
+        return ""
+
 
 def _unit_exists(name):
     """Есть ли такой systemd-юнит на хосте (контейнер видит хост через pid: host и /host)."""
@@ -141,7 +178,7 @@ class H(BaseHTTPRequestHandler):
             # was indistinguishable from "service up" — there was no way to alert on it at all.
             if running:
                 uptime_lines += f'monad_service_uptime_seconds{{service="{svc}"}} {now - started}\n'
-        body += up_lines + uptime_lines
+        body += up_lines + uptime_lines + _consensus_health_lines()
         self.send_response(200); self.send_header('Content-Type','text/plain; version=0.0.4'); self.end_headers()
         self.wfile.write(body.encode())
 
@@ -205,4 +242,4 @@ def updater_uptime():
 
 threading.Thread(target=updater_blocks, daemon=True).start()
 threading.Thread(target=updater_uptime, daemon=True).start()
-HTTPServer(('0.0.0.0', 9101), H).serve_forever()
+HTTPServer(('127.0.0.1', int(os.getenv('EXPORTER_PORT','9101'))), H).serve_forever()

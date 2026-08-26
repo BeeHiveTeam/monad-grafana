@@ -154,7 +154,7 @@
           "instant": true
         }
       ],
-      "description": "Network as reported by the NODE itself (exported_network, from the node's own OTel resource attributes). Previously this read the `network` label, which Prometheus attaches from prometheus.yml — so the panel echoed the installer's configuration back rather than checking it, and would have confirmed a mislabelled config as correct."
+      "description": "Network as reported by the NODE itself (exported_network, from the node's own OTel resource attributes). Previously this read the `network` label, which Prometheus attaches from prometheus.yml \u2014 so the panel echoed the installer's configuration back rather than checking it, and would have confirmed a mislabelled config as correct."
     },
     {
       "id": 77,
@@ -179,12 +179,12 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "⚠ NOT COMPLIANT",
+                  "text": "\u26a0 NOT COMPLIANT",
                   "color": "red",
                   "index": 0
                 },
                 "1": {
-                  "text": "✓ COMPLIANT",
+                  "text": "\u2713 COMPLIANT",
                   "color": "green",
                   "index": 1
                 }
@@ -407,7 +407,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Age of the newest block seen by the exporter. The exporter polls every 10s, so this oscillates 0-10s on a perfectly healthy node — measured over 24h here: median 5s, p99 10s. The old yellow threshold of 3s was below the normal range, so the panel was amber 65% of the time and stopped meaning anything. Yellow now starts past the poll interval."
+      "description": "Age of the newest block seen by the exporter. The exporter polls every 10s, so this oscillates 0-10s on a perfectly healthy node \u2014 measured over 24h here: median 5s, p99 10s. The old yellow threshold of 3s was below the normal range, so the panel was amber 65% of the time and stopped meaning anything. Yellow now starts past the poll interval."
     },
     {
       "fieldConfig": {
@@ -595,7 +595,7 @@
         "y": 9
       },
       "id": 10,
-      "title": "Service uptime · Peers",
+      "title": "Service uptime \u00b7 Peers",
       "type": "row"
     },
     {
@@ -732,7 +732,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Live authenticated wireauth sessions (monad_wireauth_udp_state_transport_sessions) — peers we are ACTUALLY connected to. NOT the discovery routing table. Collapses to ~0 when the node loses connectivity, unlike 'Known (disc)'."
+      "description": "Live authenticated wireauth sessions (monad_wireauth_udp_state_transport_sessions) \u2014 peers we are ACTUALLY connected to. NOT the discovery routing table. Collapses to ~0 when the node loses connectivity, unlike 'Known (disc)'."
     },
     {
       "fieldConfig": {
@@ -1386,7 +1386,7 @@
         "y": 37
       },
       "id": 40,
-      "title": "Disk · Filesystem",
+      "title": "Disk \u00b7 Filesystem",
       "type": "row"
     },
     {
@@ -1581,7 +1581,7 @@
         "y": 51
       },
       "id": 50,
-      "title": "TxPool · Raptorcast",
+      "title": "TxPool \u00b7 Raptorcast",
       "type": "row"
     },
     {
@@ -1695,13 +1695,13 @@
           }
         }
       ],
-      "title": "TxPool create_proposal — mean latency",
+      "title": "TxPool create_proposal \u2014 mean latency",
       "type": "stat",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "MEAN, not p99 — the panel was titled p99 but plotted a cumulative sum of nanoseconds divided by 1e6, which is neither a percentile nor a latency. No _p99 series exists for this metric. Now: total elapsed per proposal over a 5m window, in milliseconds. Reads 0 on a full node, which proposes no blocks."
+      "description": "MEAN, not p99 \u2014 the panel was titled p99 but plotted a cumulative sum of nanoseconds divided by 1e6, which is neither a percentile nor a latency. No _p99 series exists for this metric. Now: total elapsed per proposal over a 5m window, in milliseconds. Reads 0 on a full node, which proposes no blocks."
     },
     {
       "fieldConfig": {
@@ -2580,7 +2580,7 @@
       "id": 72,
       "type": "stat",
       "title": "Known (disc)",
-      "description": "Peers known via discovery routing table (monad_peer_disc_num_peers). Does NOT mean connected — stays high even when sessions die. High here + low 'Active peers' = node isolated.",
+      "description": "Peers known via discovery routing table (monad_peer_disc_num_peers). Does NOT mean connected \u2014 stays high even when sessions die. High here + low 'Active peers' = node isolated.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2636,7 +2636,7 @@
       },
       "id": 78,
       "panels": [],
-      "title": "TrieDB (raw device — invisible to df and node_exporter)",
+      "title": "TrieDB (raw device \u2014 invisible to df and node_exporter)",
       "type": "row"
     },
     {
@@ -2647,7 +2647,7 @@
       "id": 79,
       "type": "gauge",
       "title": "TrieDB fill",
-      "description": "TrieDB lives on a raw block device with no filesystem, so node_exporter and df cannot see it. Between MIP-8 Phase A and Phase C both encodings are written at once and this grows well beyond its steady-state size — watch headroom here, not on the / bar.",
+      "description": "TrieDB lives on a raw block device with no filesystem, so node_exporter and df cannot see it. Between MIP-8 Phase A and Phase C both encodings are written at once and this grows well beyond its steady-state size \u2014 watch headroom here, not on the / bar.",
       "gridPos": {
         "h": 6,
         "w": 6,
@@ -2745,7 +2745,7 @@
       "id": 81,
       "type": "stat",
       "title": "MIP-8 migration phase",
-      "description": "0 legacy/slot · 1 dual-timeline (Phase A done, awaiting the fork) · 2 page-encoded (Phase C done). Phase 1 is a steady state, not a migration in flight. On testnet MONAD_TEN activates 2026-08-12 14:30 UTC; a node still showing 0 will refuse to start on the release that carries the fork.",
+      "description": "0 legacy/slot \u00b7 1 dual-timeline (Phase A done, awaiting the fork) \u00b7 2 page-encoded (Phase C done). Phase 1 is a steady state, not a migration in flight. On testnet MONAD_TEN activates 2026-08-12 14:30 UTC; a node still showing 0 will refuse to start on the release that carries the fork.",
       "gridPos": {
         "h": 6,
         "w": 6,
@@ -2770,17 +2770,17 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "0 · legacy/slot",
+                  "text": "0 \u00b7 legacy/slot",
                   "color": "red",
                   "index": 0
                 },
                 "1": {
-                  "text": "1 · dual-timeline",
+                  "text": "1 \u00b7 dual-timeline",
                   "color": "blue",
                   "index": 1
                 },
                 "2": {
-                  "text": "2 · page-encoded",
+                  "text": "2 \u00b7 page-encoded",
                   "color": "green",
                   "index": 2
                 }
@@ -2813,7 +2813,7 @@
       "id": 82,
       "type": "stat",
       "title": "TrieDB probe",
-      "description": "1 = the exporter read the device this cycle. 0 or missing means the numbers above are stale — absence of data is not the same as a healthy database.",
+      "description": "1 = the exporter read the device this cycle. 0 or missing means the numbers above are stale \u2014 absence of data is not the same as a healthy database.",
       "gridPos": {
         "h": 3,
         "w": 6,
@@ -2867,6 +2867,308 @@
         "graphMode": "none",
         "textMode": "value"
       }
+    },
+    {
+      "type": "row",
+      "title": "Consensus health (derived \u2014 only visible from inside the node)",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 107,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "TC round ratio",
+      "description": "Rounds closed by a timeout certificate instead of a quorum. The primary liveness-stress signal; cannot be observed from outside a running node. Gap = skip (not measured), never zero.",
+      "gridPos": {
+        "x": 0,
+        "y": 108,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "monad_ch_tc_round_ratio",
+          "refId": "A",
+          "legendFormat": "{{network}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 4,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.05
+              },
+              {
+                "color": "red",
+                "value": 0.15
+              }
+            ]
+          },
+          "noValue": "skip \u2014 not measured"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Execution lag rate",
+      "description": "Execution falling behind consensus \u2014 the deferred-execution gap widening.",
+      "gridPos": {
+        "x": 6,
+        "y": 108,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "monad_ch_execution_lagging_rate",
+          "refId": "A",
+          "legendFormat": "{{network}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 4,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.1
+              },
+              {
+                "color": "red",
+                "value": 0.3
+              }
+            ]
+          },
+          "noValue": "skip \u2014 not measured"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Round recovery rate",
+      "description": "Rounds that needed recovery. Non-zero is a stress sign.",
+      "gridPos": {
+        "x": 12,
+        "y": 108,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "monad_ch_round_recovery_rate",
+          "refId": "A",
+          "legendFormat": "{{network}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 4,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.001
+              },
+              {
+                "color": "red",
+                "value": 0.01
+              }
+            ]
+          },
+          "noValue": "skip \u2014 not measured"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Out-of-order proposals",
+      "description": "Proposal delivery disorder.",
+      "gridPos": {
+        "x": 18,
+        "y": 108,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "monad_ch_out_of_order_rate",
+          "refId": "A",
+          "legendFormat": "{{network}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 4,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.01
+              },
+              {
+                "color": "red",
+                "value": 0.05
+              }
+            ]
+          },
+          "noValue": "skip \u2014 not measured"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Consensus stress over time",
+      "description": "Gaps are deliberate: a skip means the signal could not be measured, and is not zero-filled.",
+      "gridPos": {
+        "x": 0,
+        "y": 112,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "expr": "monad_ch_tc_round_ratio",
+          "refId": "A",
+          "legendFormat": "tc ratio"
+        },
+        {
+          "expr": "monad_ch_execution_lagging_rate",
+          "refId": "B",
+          "legendFormat": "execution lag"
+        },
+        {
+          "expr": "monad_ch_round_recovery_rate",
+          "refId": "C",
+          "legendFormat": "round recovery"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "noValue": "skip"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Signal state (-1 skip / 0 ok / 1 warn / 2 crit)",
+      "description": "Explicit three-state contract. A skip is a reported non-measurement, never a healthy-looking zero.",
+      "gridPos": {
+        "x": 12,
+        "y": 112,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "expr": "monad_ch_tc_round_ratio_state",
+          "refId": "A",
+          "legendFormat": "tc {{state}}"
+        },
+        {
+          "expr": "monad_ch_block_liveness_state",
+          "refId": "B",
+          "legendFormat": "liveness {{state}}"
+        },
+        {
+          "expr": "monad_ch_raptorcast_p99_ms_state",
+          "refId": "C",
+          "legendFormat": "raptorcast {{state}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": -1,
+          "max": 2,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        }
+      }
     }
   ],
   "refresh": "15s",
@@ -2880,7 +3182,7 @@
     "to": "now"
   },
   "timezone": "browser",
-  "title": "Monad Node — Overview",
+  "title": "Monad Node \u2014 Overview",
   "uid": "cfkugnwjq8kjkb",
   "templating": {
     "list": [

@@ -17,10 +17,10 @@ Four Docker containers, ~160 MB RAM total, ~0.2% CPU:
 |---|---|---|
 | **Prometheus** | `127.0.0.1:9090` | Scrapes 4 targets (otelcol, rpc-exporter, node-exporter, self). 30-day / 10 GB retention. |
 | **Grafana** | `127.0.0.1:3000` (or `0.0.0.0:3000` with `--public`) | Prometheus pre-provisioned, dashboard auto-loaded. |
-| **monad-rpc-exporter** | `127.0.0.1:9101` | Python sidecar (stdlib only) — polls JSON-RPC for block height + sync gap, reads `/proc` for service uptime. Runs as `nobody` (uid 65534). |
+| **monad-rpc-exporter** | `127.0.0.1:9101` | Python sidecar (stdlib only) — polls JSON-RPC for block height + sync gap, reads `/proc` for service uptime, and derives the `monad_ch_*` consensus-health signals from the node's own counters. Runs as `nobody` (uid 65534). |
 | **node-exporter** | host `:9100` (UFW-restricted to bridge subnet) | Prometheus standard host metrics: CPU, memory, swap, load average, disk I/O, filesystem, network — fills the panels that `monad_*` metrics don't cover. |
 
-**Dashboard**: 58 panels across 10 sections — Node info · Sync status · Service uptime / peers · Vote delay · System resources · Disk / filesystem · TxPool / Raptorcast · Errors / failures · VDP / MF push · TrieDB. **Datasource templated** (works with multiple Prometheus instances) and **no hardcoded device/interface names** (adapts to whatever NVMe/NIC names your host uses).
+**Dashboard**: 75 panels across 11 sections — Node info · Sync status · Service uptime / peers · Vote delay · System resources · Disk / filesystem · TxPool / Raptorcast · Errors / failures · VDP / MF push · TrieDB · **Consensus health**. **Datasource templated** (works with multiple Prometheus instances) and **no hardcoded device/interface names** (adapts to whatever NVMe/NIC names your host uses).
 
 Container logs are rotated (json-file driver, 10 MB × 3 files per service) — won't fill the disk. Each container has explicit `mem_limit` + `cpus` constraints so they can't starve the validator.
 
@@ -230,17 +230,21 @@ monad-grafana/
 │   └── dashboards/
 │       └── monad-overview.json            # dashboard, datasource-templated
 ├── exporter/
-│   └── exporter.py                        # Python sidecar (stdlib only, runs as nobody)
+│   ├── exporter.py                        # Python sidecar (stdlib only, runs as nobody)
+│   ├── consensus_health.py                # derives monad_ch_* from the node's counters
+│   ├── test_consensus_health.py           # offline tests (python3 -m unittest, no network)
+│   └── fixtures/                          # captured node metrics: validator, full-node, mainnet, degraded
 ├── scripts/
 │   ├── healthcheck.sh                     # post-install verification (cron-friendly)
 │   └── apply_hostmetrics_overlay.py       # adds hostmetrics receiver to otelcol-contrib config
 └── docs/
-    └── ENABLE_HOSTMETRICS.md              # manual procedure (review-then-apply)
+    ├── ENABLE_HOSTMETRICS.md              # manual procedure (review-then-apply)
+    └── CONSENSUS_SIGNALS.md               # formulas, units and the three-state contract
 ```
 
 ---
 
-## What's inside the dashboard (58 panels)
+## What's inside the dashboard (75 panels)
 
 **Sync status** — Local block height · Public block height · Sync gap · Last block age · RPC up indicators · Block commit rate · Local timeouts/min
 
@@ -258,6 +262,13 @@ monad-grafana/
 
 **Errors / failures** — 14 validation error types · 6 wireauth error types · blocksync failures · statesync · blocktree · network errors · raptorcast recv errors · consensus timeouts/failures
 
+**Consensus health** — TC round ratio · execution lag rate · round recovery rate · out-of-order proposals · consensus stress over time · signal state (-1 skip / 0 ok / 1 warn / 2 crit)
+
+These are *derived* signals rather than exported ones: the node publishes cumulative
+counters, and health is the movement and the ratios between them. Because those counters
+only exist inside a running client, none of it is obtainable by observing the network from
+the outside. Full formulas and units in [docs/CONSENSUS_SIGNALS.md](docs/CONSENSUS_SIGNALS.md).
+
 ---
 
 ## Configuration
@@ -270,6 +281,23 @@ Defaults assume Monad RPC on `localhost:8080` and public testnet at `https://tes
 LOCAL_RPC_URL=http://host.docker.internal:8080
 PUBLIC_RPC_URL=https://testnet-rpc.monad.xyz
 ```
+
+### Consensus-health endpoint
+
+The `monad_ch_*` signals are computed by diffing two scrapes of the node's own metrics
+endpoint. The exporter reads it from `CH_ENDPOINT`, defaulting to
+`http://host.docker.internal:9143/metrics`. Point it elsewhere for a split deployment:
+
+```yaml
+# docker-compose.yml, monad-rpc-exporter service
+environment:
+  - CH_ENDPOINT=http://10.0.0.5:9143/metrics
+```
+
+If the endpoint is unreachable the exporter keeps serving everything else and simply
+publishes no `monad_ch_*` series — a signal that cannot be measured is never emitted as
+a zero. The first scrape after a restart also publishes nothing, because a rate needs
+two points and one point is not a window.
 
 ### Hostname / network labels
 
@@ -389,6 +417,15 @@ The installer's `apply_hostmetrics()` auto-restores the most recent `.bak.<ts>` 
 30-day retention with default scrape interval = ~1–2 GB. If higher, check `--storage.tsdb.retention.size=10GB` cap in `docker-compose.yml`.
 
 ---
+
+### `node_systemd_*` metrics are empty
+
+Known, and not your setup. The `--collector.systemd` flag is enabled but exports nothing:
+verified on two hosts, with and without the `/run/systemd` socket mounted, and
+`count(node_systemd_unit_state)` is empty in both cases. Service state is covered by
+`monad_service_up` from the sidecar instead, which reads `/proc` directly. Do not build
+alerts on `node_systemd_*` until this is resolved — an absent series looks exactly like
+a healthy zero.
 
 ## Operations
 
