@@ -127,6 +127,31 @@ class Mutation(unittest.TestCase):
         self.assertEqual(s.state, "skip")
         self.assertIsNone(s.value)   # never a negative ratio
 
+    def test_counter_absent_in_one_snapshot_is_skip_not_zero(self):
+        # _delta must answer None, not 0, when a metric is missing from either
+        # snapshot. With 0 the ratio gets computed from a number nobody measured:
+        # the denominator grows, the numerator "stays at zero", and a node that
+        # simply does not export the tc counter reads as a perfectly healthy 0.0.
+        prev = parse_exposition('monad_state_consensus_events_enter_new_round_qc{n="t"} 100')
+        cur = parse_exposition('monad_state_consensus_events_enter_new_round_qc{n="t"} 200\n'
+                               'monad_state_consensus_events_enter_new_round_tc{n="t"} 50')
+        s = sig(compute_signals(prev, cur), "tc_round_ratio")
+        self.assertEqual(s.state, "skip")
+        self.assertIsNone(s.value)
+
+    def test_zero_delta_is_a_stall_not_missing_data(self):
+        # The mirror of the reset guard. A counter that did not move is a
+        # measurement -- the node committed nothing -- so _delta must answer 0
+        # rather than None. Under a d>0 guard the liveness signal would report
+        # "no delta" and a genuinely stalled node would read as an absence
+        # instead of a crit, which is the one verdict that matters here.
+        prev = parse_exposition('monad_state_consensus_events_commit_block{n="t"} 4242')
+        cur = parse_exposition('monad_state_consensus_events_commit_block{n="t"} 4242')
+        prev.scraped_at, cur.scraped_at = 0.0, 60.0   # window long enough to expect a block
+        s = sig(compute_signals(prev, cur), "block_liveness")
+        self.assertEqual(s.state, "crit")
+        self.assertEqual(s.value, 0.0)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
