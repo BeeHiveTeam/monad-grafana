@@ -18,6 +18,9 @@ REPO_URL="${REPO_URL:-https://github.com/BeeHiveTeam/monad-grafana.git}"
 LOCAL_RPC_URL="${LOCAL_RPC_URL:-http://host.docker.internal:8080}"
 PUBLIC_RPC_URL="${PUBLIC_RPC_URL:-https://testnet-rpc.monad.xyz}"
 PUBLIC_ACCESS="${PUBLIC_ACCESS:-0}"      # 1 = bind Grafana on 0.0.0.0:3000 + open UFW :3000/tcp
+# No --dry-run flag sets this; install_triedb_exporter reads it, and under `set -u` an unset
+# variable aborted every install, split node-side install and --upgrade on a host with monad-mpt.
+DRY_RUN="${DRY_RUN:-0}"
 NON_INTERACTIVE="${NON_INTERACTIVE:-0}"
 ACTION="install"
 LOG_FILE="/tmp/monad-grafana-install-$(date +%Y%m%d-%H%M%S).log"
@@ -839,9 +842,12 @@ setup_ufw() {
   # a firewall that looks correctly configured. Verified live: rules said 172.18.0.0/16 while
   # the pinned network is 172.31.240.0/24.
   local _stale _r
+  # `|| true`: with no stale rule — the first install, and every normal re-run — a grep in
+  # this pipeline matches nothing, pipefail makes the assignment fail, and `set -e` ended the
+  # whole installer here with no message and no rules added.
   _stale=$(ufw status numbered 2>/dev/null \
-           | grep -E 'monad-grafana → (otelcol|monad-rpc|node-exporter)' \
-           | grep -vF "$subnet" | grep -oE '^\[[ ]*[0-9]+\]' | grep -oE '[0-9]+' | sort -rn)
+           | grep -E 'monad-grafana → (otelcol|monad-rpc|node-exporter|node metrics)' \
+           | grep -vF "$subnet" | grep -oE '^\[[ ]*[0-9]+\]' | grep -oE '[0-9]+' | sort -rn || true)
   if [[ -n "$_stale" ]]; then
     info "Removing UFW rules for a previous docker subnet (current is $subnet)…"
     # Delete highest index first: ufw renumbers after each delete.
@@ -851,11 +857,16 @@ setup_ufw() {
     ok "Stale UFW rules removed."
   fi
 
-  info "Adding UFW allow rules: $subnet → :8889, :8080, :9100…"
+  info "Adding UFW allow rules: $subnet → :8889, :8080, :9100, :9143…"
   ufw allow from "$subnet" to any port 8889 proto tcp comment 'monad-grafana → otelcol' >> "$LOG_FILE" 2>&1 || true
   ufw allow from "$subnet" to any port 8080 proto tcp comment 'monad-grafana → monad-rpc' >> "$LOG_FILE" 2>&1 || true
   ufw allow from "$subnet" to any port 9100 proto tcp comment 'monad-grafana → node-exporter' >> "$LOG_FILE" 2>&1 || true
-  ok "UFW rules added for subnet $subnet."
+  # :9143 is the node's own metrics endpoint, read by the consensus-health exporter. The
+  # Foundation asks operators to deny it from everywhere else, and an appended allow would sit
+  # below that deny and never match — so prepend, which puts it first among the IPv4 rules.
+  ufw prepend allow from "$subnet" to any port 9143 proto tcp comment 'monad-grafana → node metrics' >> "$LOG_FILE" 2>&1 \
+    || ufw allow from "$subnet" to any port 9143 proto tcp comment 'monad-grafana → node metrics' >> "$LOG_FILE" 2>&1 || true
+  ok "UFW rules added for subnet $subnet (:8889, :8080, :9100, :9143)."
 
   if (( PUBLIC_ACCESS == 1 )); then
     info "Opening UFW :3000/tcp (--public — Grafana reachable from anywhere)…"
@@ -1294,13 +1305,17 @@ EOF
 configure_ufw_for_monitor() {
   local monitor="$1"
   if ! command -v ufw >/dev/null || ! ufw status >/dev/null 2>&1; then
-    warn "ufw not active. Manually allow ${monitor} → :8889, :9100, :8080 on your firewall."
+    warn "ufw not active. Manually allow ${monitor} → :8889, :9100, :8080, :9143 on your firewall."
     return
   fi
   info "Adding UFW allow rules: ${monitor} → :8889, :9100, :8080…"
   ufw allow from "$monitor" to any port 8889 proto tcp comment 'monad-grafana monitor → otelcol' >> "$LOG_FILE" 2>&1 || true
   ufw allow from "$monitor" to any port 9100 proto tcp comment 'monad-grafana monitor → node-exporter' >> "$LOG_FILE" 2>&1 || true
   ufw allow from "$monitor" to any port 8080 proto tcp comment 'monad-grafana monitor → monad-rpc' >> "$LOG_FILE" 2>&1 || true
+  # Same endpoint and the same deny as in setup_ufw: prepend so the monitor's consensus-health
+  # exporter (CH_ENDPOINT pointed at this node) is not shadowed by a deny on :9143.
+  ufw prepend allow from "$monitor" to any port 9143 proto tcp comment 'monad-grafana monitor → node metrics' >> "$LOG_FILE" 2>&1 \
+    || ufw allow from "$monitor" to any port 9143 proto tcp comment 'monad-grafana monitor → node metrics' >> "$LOG_FILE" 2>&1 || true
   ok "UFW rules added for monitor ${monitor}."
 }
 
