@@ -20,7 +20,7 @@ Four Docker containers, ~160 MB RAM total, ~0.2% CPU:
 | **monad-rpc-exporter** | `127.0.0.1:9101` | Python sidecar (stdlib only) — polls JSON-RPC for block height + sync gap, reads `/proc` for service uptime, and derives the `monad_ch_*` consensus-health signals from the node's own counters. Runs as `nobody` (uid 65534). |
 | **node-exporter** | host `:9100` (UFW-restricted to bridge subnet) | Prometheus standard host metrics: CPU, memory, swap, load average, disk I/O, filesystem, network — fills the panels that `monad_*` metrics don't cover. |
 
-**Dashboard**: 75 panels across 11 sections — Node info · Sync status · Service uptime / peers · Vote delay · System resources · Disk / filesystem · TxPool / Raptorcast · Errors / failures · VDP / MF push · TrieDB · **Consensus health**. **Datasource templated** (works with multiple Prometheus instances) and **no hardcoded device/interface names** (adapts to whatever NVMe/NIC names your host uses).
+**Dashboard**: panels grouped into sections — Node info · Sync status · Service uptime / peers · Vote delay · System resources · Disk / filesystem · TxPool / Raptorcast · Errors / failures · VDP / MF push · TrieDB · **Consensus health**. **Datasource templated** (works with multiple Prometheus instances) and **no hardcoded device/interface names** (adapts to whatever NVMe/NIC names your host uses).
 
 Container logs are rotated (json-file driver, 10 MB × 3 files per service) — won't fill the disk. Each container has explicit `mem_limit` + `cpus` constraints so they can't starve the validator.
 
@@ -244,7 +244,7 @@ monad-grafana/
 
 ---
 
-## What's inside the dashboard (75 panels)
+## What's inside the dashboard
 
 **Sync status** — Local block height · Public block height · Sync gap · Last block age · RPC up indicators · Block commit rate · Local timeouts/min
 
@@ -473,12 +473,12 @@ MIT — see [LICENSE](LICENSE).
 ## Доставка алертов
 
 В стеке **нет Alertmanager** — и это осознанно. Правила из `prometheus/alerts.yml`
-(17 штук) забирает `monad-tg-bot`: он опрашивает `/api/v1/rules` и `/api/v1/alerts`,
+забирает `monad-tg-bot`: он опрашивает `/api/v1/rules` и `/api/v1/alerts`,
 пересылает в Telegram только переходы состояния и переиспользует уже готовые у него
 доставку, повторы, очередь недоставленного и список разрешённых чатов.
 
 ```
-Prometheus (17 правил) → /api/v1/alerts → monad-tg-bot → Telegram
+Prometheus (правила алертов) → /api/v1/alerts → monad-tg-bot → Telegram
 ```
 
 Дублей нет: то, что бот проверяет напрямую (сервисы, локальный RPC, застой блока, диск),
