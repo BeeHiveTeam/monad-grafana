@@ -604,7 +604,7 @@ apply_hostmetrics() {
     err "  Restoring config from most-recent backup to bring the collector back up…"
     # Find newest backup created by the overlay script.
     local latest_bak
-    latest_bak=$(ls -t "${OTELCOL_CONFIG}".bak.* 2>/dev/null | head -1)
+    latest_bak=$(ls -t "${OTELCOL_CONFIG}".bak.* 2>/dev/null | head -1) || true  # no backup: ls fails, and under pipefail + set -e that ended the script
     if [[ -n "$latest_bak" ]]; then
       cp -a "$latest_bak" "$OTELCOL_CONFIG"
       systemctl restart "$OTELCOL_SVC"
@@ -1427,18 +1427,22 @@ do_uninstall() {
 
   if command -v ufw >/dev/null && ufw status >/dev/null 2>&1; then
     if confirm "Remove UFW rules with comment 'monad-grafana'?"; then
-      local _ufw_attempts=0
+      # Under `set -euo pipefail`: `yes y | ufw delete` ends with 141 (yes killed by SIGPIPE), so
+      # the loop stopped after one rule and still said they were removed; and a grep with no match
+      # ends the whole script once the last rule is gone. One awk, `|| true`, and --force instead.
+      local _ufw_attempts=0 n="" _ufw_left
       while [[ $_ufw_attempts -lt 30 ]]; do
-        local n
-        n=$(ufw status numbered 2>/dev/null | grep 'monad-grafana' | head -1 | awk -F'[][]' '{print $2}')
+        n=$(ufw status numbered 2>/dev/null | awk -F'[][]' '/monad-grafana/ {print $2; exit}') || true
         [[ -z "$n" ]] && break
-        if ! yes y | ufw delete "$n" >/dev/null 2>&1; then
+        if ! ufw --force delete "$n" >/dev/null 2>&1; then
           warn "Failed to delete UFW rule $n — remove manually: sudo ufw delete $n"
           break
         fi
         _ufw_attempts=$(( _ufw_attempts + 1 ))
       done
-      ok "UFW rules removed."
+      _ufw_left=$(ufw status numbered 2>/dev/null | grep -c 'monad-grafana') || true
+      if [[ "${_ufw_left:-0}" -eq 0 ]]; then ok "UFW rules removed."
+      else warn "${_ufw_left} UFW rule(s) with comment 'monad-grafana' left — see: sudo ufw status numbered"; fi
     fi
   fi
 
@@ -1468,7 +1472,7 @@ do_uninstall() {
   done
   if [[ -n "$otel_cfg" ]]; then
     local newest_bak
-    newest_bak=$(ls -t "${otel_cfg}".bak.* 2>/dev/null | head -1)
+    newest_bak=$(ls -t "${otel_cfg}".bak.* 2>/dev/null | head -1) || true  # no backup: ls fails, and under pipefail + set -e that ended the script
     if [[ -n "$newest_bak" ]] && confirm "Restore $otel_cfg from $newest_bak (removes the hostmetrics overlay)?"; then
       cp -a "$newest_bak" "$otel_cfg"
       local svc; svc=$([[ "$otel_cfg" == *otelcol-contrib* ]] && echo otelcol-contrib || echo otelcol)
