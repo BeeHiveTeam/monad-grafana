@@ -1,0 +1,20 @@
+name: ci
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exporter tests
+        run: cd exporter && python3 -m unittest -v test_consensus_health
+      - name: Python compiles
+        run: python3 -m py_compile exporter/*.py scripts/*.py
+      - name: Dashboard is valid JSON
+        run: python3 -m json.tool grafana/dashboards/monad-overview.json >/dev/null
+      - name: Prometheus accepts the rules and the config
+        # The image docker-compose.yml runs, so what passes here is what Prometheus loads.
+        run: |
+          docker run --rm --network none --entrypoint promtool -v "$PWD/prometheus:/p:ro" prom/prometheus:v2.55.0 check rules /p/alerts.yml
+          docker run --rm --network none --entrypoint promtool -v "$PWD/prometheus:/p:ro" prom/prometheus:v2.55.0 check config --syntax-only /p/prometheus.yml
